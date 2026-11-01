@@ -1,0 +1,5 @@
+,rerun,benchmark_short,mode,threads_blobshuffle,score,score_confidence_low,score_confidence_high,score_unit
+base,01,mb1_rawNoFinalize,thrpt,1,100,90,110,ops/s
+base,02,mb1_rawNoFinalize,thrpt,1,0.2,0.18,0.22,ops/ms
+1a,01,mb1_rawNoFinalize,thrpt,2,400,360,440,ops/s
+1a,02,mb1_rawNoFinalize,thrpt,2,0.6,0.54,0.66,ops/ms

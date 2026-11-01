@@ -1,0 +1,26 @@
+[project]
+name = "src"
+version = "0.1.0"
+description = "Configuration-driven visualization of the BlobShuffle JMH ledger"
+requires-python = ">=3.11"
+dependencies = ["matplotlib>=3.8", "numpy>=1.26", "pandas>=2.2", "pyyaml>=6.0"]
+
+[project.scripts]
+thrpt = "src.cli:main"
+speedup = "src.cli:speedup_main"
+gc = "src.cli:gc_main"
+help = "src.cli:help_main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

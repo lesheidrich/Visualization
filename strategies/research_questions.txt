@@ -1,0 +1,166 @@
+define research questions
+how do we measure it?
+thorughput, + gc and aux batches (to see if it goes against blobshuffle prerogatives)
+also latency->duration : tail distribution?
+
+
+visualize:
+- thrpt + CI (barchart with ci error bars)
+- batch fill prop/16mib
+- GC activity (gc_allocation_rate_norm, gc_count, gc_time) + pauses_max /strategy (as nice barchart)
+
+if there's time:
+- p95 vs stdev
+- pauses (supporting graph for thrpt + CI)
+- line chart for speedup / N threads (sub linear or super linear, etc) actual speedup is normalize per thread
+
+
+!!!!!!!!
+**drop the different day part in reruns. maybe change to fresh instance if source allows.
+
+cost latency box graph where you take the direction you want (like ML) call it thrpt space or latency space or sg
+--but how the heck do i measure cost???
+
+use active voice (we did vs was done)
+
+ 
++-----+
+| RQs |
++-----+
+DROP: Cleanups per 1M records, pauses_p99, CV %, self-relative speedup, comp_time_*
+                            (perform best)
+- Which threading strategies have the highest throughput measured in records/timeframe across multiple streaming threads, while keeping BlobShuffle's main arhcitecture (and principles --but this is mainly the next one) intact?
+	+? does narrowing a single lock scope make a strategy that can beat the unthreaded baseline (thrpt)?
+	+? does removing buffer sharing beat single lock contention variants (thrpt) ? and what is the memory cost (gc/batchsize/pauses/stdev/p95)
+		OPTION A) each gets it's own barchart across the N threads (x) -> faceted plots (or maybe all normalized and side by side bars for each metric)
+		OPTION B) Table: strategy × N, each cell "p50 / p99" for tail latency
+		          Table: strategy × N, in B/op for garbage per record  **if it changes a lot make it a plot, otherwise table**
+				  Extra column in the GC table for GC time %
+				  Extra column in the GC table for pauses_max (and maybe even pauses_p99)
+				  
+		- gc.alloc.rate.norm (B/op), log scale - bytes per record during one benchmark record call
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+		| Plot                        | Y-axis             | Formula                                                    | Example   | Why (simple)                                |
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+		| 1. Garbage per record       | Bytes per op       | gc_alloc_rate_norm                                         | 10,751 B  | How much trash the program makes for each   |
+		|                             |                    |                                                            |           | record. Less trash is better.               |
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+		| 2. Time lost to GC          | % of run time      | gc_time / 250,000 ms * 100                                 | 1.24 %    | How much of the time the program stops to   |
+		|                             |                    |           (5 forks × 5 iterations × 10 s)                  |           | clean up instead of working.                |
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+		| 3. Cleanups per million     | GCs per 1M records | gc_count / (aux_recordBytes / 1032 * 250,000) * 10^6       | 14.5      | How often it cleans up for the same amount  |
+		|    records                  |                    |                               records per ms               |           | of work. Raw counts are unfair: a faster    |
+		|                             |                    |                                                 GCs/ms     |           | strategy does more work, so it cleans more. |
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+		| 4. Worst pauses             | ms                 | pauses_p99                                                 | 1.29 ms   | How long the longest normal stops last.     |
+		|                             |                    |                                                            |           | Long stops make some records wait.          |
+		+-----------------------------+--------------------+------------------------------------------------------------+-----------+---------------------------------------------+
+
+	+? does partition merge order matter (statistically significant)? 2a vs 2b
+		Table: one row per N with ratio, 99% CI, Cohen's d, and equivalence verdict
+		How to compare 2A and 2B
+		1. Set your rules before running anything.
+		   - Ratio direction: always 2A/2B.
+		   - Equivalence margin: the smallest difference that matters in practice, for example ±2%.
+		   - Write both down before you look at any data.
+		2. Run the experiment.
+		   - Do at least 10 reruns, each on a fresh EC2 instance: terminate the old one and launch a new m6i.4xlarge.
+		   - Each rerun uses 5 forks × 5 iterations at all 5 thread counts (1, 2, 4, 6, 8).
+		   - Warm-up is 5 × 10 s, and it's discarded.
+		   - On every instance, run 2A and 2B in a random, interleaved order.
+		3. Check the raw data.
+		   - Look at the per-iteration and per-fork results for trends, drift, or outlier forks.
+		   - Do this before you average anything.
+		4. Build the replicates. Iterations and forks share a machine, so they aren't independent replicates.
+		   1. Average iterations into fork means.
+		   2. Average fork means into rerun means.
+		   3. For each rerun and each thread count, compute log(2A / 2B).
+		   rerun (fresh EC2 instance)   <- replicate
+			└─ fork (fresh JVM)         <- average
+				└─ iteration            <- average
+		5. Compute the effect for each thread count.
+		   - Ratio: a paired t-interval on the 10+ log ratios, converted back from the log scale.
+		   - CI level: use 99%. That's Bonferroni for 5 thread counts (0.05 / 5).
+		   - Cohen's d: the mean of the log ratios divided by their standard deviation.
+		   - Don't use JMH's score_error. It treats iterations as independent, so it's too narrow.
+		6. Read the result for each thread count.
+		   - 99% CI entirely above or below 1: one strategy is faster, by the amount the CI shows.
+		   - 90% CI entirely inside your margin: the strategies are equivalent at that thread count.
+		   - Neither: inconclusive, so add more reruns.
+		7. Add a merge-only benchmark.
+		   - The merge runs once per batch, so throughput may not show any difference between 2A and 2B.
+		   - Benchmark the merge directly:
+			 - Use a @State that holds frozen collectors.
+			 - Pass the merge output to a Blackhole.
+			 - Use sample mode and measure time per merge.
+			 - Sweep threads and partitions.
+		   - Analyse it with steps 3–6.
+		8. Report:
+		   - For each thread count: the ratio, its 99% CI, and Cohen's d.
+		   - For each thread count: the equivalence verdict and the margin you set.
+		   - Run counts (reruns × forks × iterations), the instance type, and that each rerun used a fresh instance.
+		9. Update the thesis to match.
+		   - §2.2.4: add one sentence saying reruns on fresh instances are the top-level replicates. §2.3.2 already notes that forks share a machine.
+		   - Script: change the RERUNS comment from "different day" to "fresh instance per rerun."
+			
+	+? does sharing a buffer without contention beat own topology or single lock variants? (thrpt)
+	+? tail duration and stdev (stdev_agg_forks) of strategies
+					Tail duration
+			-------------
+			Plot:   Grouped bars per thread count, one bar per strategy.
+					  bar height = p50 (the typical operation)
+					  marker on top of each bar = p99 (and p99.9 if you have it)
+					  y-axis = log scale
+
+			Read:   The gap between the bar and the marker is the tail. A long gap
+					means a few operations get stuck, for example waiting for a
+					lock or for GC.
+
+			Stdev (stdev_agg_forks)
+			-----------------------
+			Plot:   Do not plot it raw. A faster strategy has bigger numbers, so it
+					also gets a bigger stdev. Plot the coefficient of variation
+					instead, as bars over thread count:
+
+					  CV % = stdev_agg_forks / score * 100
+
+			Read:   "How wobbly is this strategy compared with its own speed?"
+					Low bars mean it gives the same result every run.
+- What is the speedup across the strategies?(sub linear/super linear?)
+		Formula:  Divide each throughput by base at N=1. Base is your
+				  no-locking single-thread reference (2.1.8 Amdahl).
+					speedup(strategy, N) = thrpt(strategy, N) / thrpt(base, 1)
+		Per rerun:  Compute speedup using the base value from the same rerun,
+					because both ran on the same instance. Then average across
+					reruns. With 10 reruns, you get a CI from those 10 speedup
+					values.
+		Plot:   Line chart, not bars.
+				  x = threads (1, 2, 4, 6, 8)
+				  y = speedup
+				  one line per strategy
+				  dashed ideal line y = N
+				  horizontal line at y = 1. Below it, the strategy is slower
+				  than plain single-threaded base, which shows the cost of
+				  locking.
+		Read:   The closer a line stays to the diagonal, the better that
+				strategy scales. A line that flattens out has hit contention.
+				For S1B, expect it to flatten at around 3 threads, because
+				there are 3 zones.
+		Extra:  To compare each strategy with its own N=1 run, use
+					thrpt(s, N) / thrpt(s, 1)
+				in a second chart. It shows scaling only, not the cost of
+				locking.
+- How do these strategies affect cost? which can't be measured so.. 
+  do they stay close to the original prerogative/idea of cost/latency by batching 
+	- is batch filling efficient or are they getting closed early? (prop/16mib)
+	- how do these strategies affect supporting systems and how do they run: 
+		- GC (gc_alloc_rate_norm, gc_count, gc_time)
+		- pauses_max
+			dot plot - y log scale, one dot per run. short line through median of each strategy at each thread count (it's gonna jump a lot between runs)
+			(or even just leave the p99 with the gc)
+- what are the hazards and invariants for threading to be safely applied (How can concurrent access to BlobShuffle's shared TaskSharedBatcher write path be made safe?)
+  (identify                           to consider under concurrent writes/concurrency)
+
+
+
+

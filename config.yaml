@@ -1,0 +1,27 @@
+# Paths are relative to this file. The supplied ledger contains example values.
+input:
+  path: docs/jmh_sample.csv
+  delimiter: auto  # auto, ',' or "\t"
+output:
+  directory: out
+  formats: [png]  # png, pdf, svg; CSV summaries are always written
+# Both benchmarks are present in the synthetic test ledger.
+benchmarks: [mb1_rawNoFinalize, mb2_rawFinalize]
+strategies:
+  labels:
+    base: Base
+    1a: S1_A
+    1b: S1_B
+    1c: S1_C
+    2null: S2_0
+    2a: S2_A
+    2b: S2_B
+    '3': S3
+    '4': S4
+  order: [base, 1a, 1b, 1c, 2null, 2a, 2b, '3', '4']
+  colors: {}  # Optional strategy identifier -> Matplotlib colour
+plot:
+  figsize: [12, 6]
+  dpi: 150
+  show: false
+# Every rerun is included. Aggregation is always arithmetic average.
