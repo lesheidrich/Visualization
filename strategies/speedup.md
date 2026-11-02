@@ -117,6 +117,6 @@ speedup
 | Output | Contents |
 |---|---|
 | One plot and CSV per rerun | The per-rerun speedups, with `score`, `baseline_score` and `speedup` |
-| One plot and CSV across reruns | `speedup` (the ratio of means), `mean_score`, `mean_baseline_score`, `n_reruns`, `total_reruns` |
+| One plot and CSV across reruns | `speedup` (the ratio of means), `mean_score`, `mean_baseline_score`, `n_reruns`, `total_reruns`, and the CI columns `ci_low`, `ci_high`, `ci_method`, `ci_resamples`, `ci_seed`, `t_low`, `t_high`, `t_basis` |
 
 The per-rerun CSV already holds everything the resampling will need, so no new table is required.

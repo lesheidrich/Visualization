@@ -62,10 +62,11 @@ def prepare(frame, config):
                                         "ci_method", "ci_resamples", "ci_seed")}
         ci["ci_seed"] = pd.NA  # Seeds exceed 2**53, so a float column would round them.
         ratios = group["speedup"].to_numpy()
+        ordered = group.sort_values("rerun", kind="stable")  # CI only: independent of ledger row order
         if has_spread(ratios):
             seed = cell_seed(benchmark, strategy, threads, "speedup")
             ci["ci_low"], ci["ci_high"] = bootstrap_ci(
-                group["score"].to_numpy(), group["baseline_score"].to_numpy(), seed=seed)
+                ordered["score"].to_numpy(), ordered["baseline_score"].to_numpy(), seed=seed)
             ci["t_low"], ci["t_high"] = t_interval(ratios)
             ci.update(ci_method=CI_METHOD, ci_resamples=BOOTSTRAP_RESAMPLES, ci_seed=seed)
         elif not (strategy == "base" and threads == 1):
@@ -116,17 +117,13 @@ def render(table, config, title, *, strategies=None, threads=None):
                 ax.errorbar(valid.index, valid["speedup"],
                             yerr=np.vstack([valid["speedup"] - valid["ci_low"],
                                             valid["ci_high"] - valid["speedup"]]),
-                            fmt="none", ecolor=config.colors.get(strategy, palette(i % 10)),
-                            elinewidth=1.5, capsize=4, zorder=3)
-            for n, row in data.iterrows():
-                if pd.notna(row["speedup"]):
-                    ax.annotate(f"n={int(row['n_reruns'])}/{int(row['total_reruns'])}",
-                                (n, row["speedup"]), xytext=(0, 5),
-                                textcoords="offset points", ha="center", fontsize=7)
+                            fmt="none", ecolor="#222", elinewidth=1.2, capsize=3,
+                            capthick=1.2, zorder=6)
     ax.set_xticks(threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel("Speedup vs. Base N=1 (dimensionless)")
-    ax.set_title(f"{title}\nError bars: {CI_METHOD}" if aggregate else title)
+    drawn = aggregate and (table["ci_low"].notna() & table["ci_high"].notna()).any()
+    ax.set_title(f"{title}\nError bars: {CI_METHOD}" if drawn else title)
     ax.set_ylim(bottom=0)
     ax.margins(y=0.15)
     ax.grid(axis="y", color="#ddd", zorder=0)
@@ -141,7 +138,7 @@ def run(config):
     observations, averages = prepare(load_ledger(config.ledger, config.delimiter), config)
     benchmark_names = file_names(config.benchmarks, "benchmark")
     rerun_names = file_names(observations["rerun"].unique(), "rerun")
-    directory = output_directory(config.output)
+    directory = output_directory(config.output, "speedup")
     paths = []
     for benchmark in config.benchmarks:
         data = observations[observations["benchmark_short"].eq(benchmark)]
@@ -149,7 +146,7 @@ def run(config):
         order, threads = strategy_order(data, config), sorted(data["threads_blobshuffle"].unique())
         tables = [(rerun_part(rerun_names[rerun]), f"{benchmark} — speedup, rerun {rerun}", group)
                   for rerun, group in data.groupby("rerun", sort=False)]
-        tables.append((AVERAGE_PART, f"{benchmark} — average speedup across all reruns", summary))
+        tables.append((AVERAGE_PART, f"{benchmark} — speedup, mean of reruns", summary))
         for suffix, title, table in tables:
             stem = directory / output_stem("speedup", benchmark_names[benchmark], suffix)
             csv_path = stem.with_suffix(".csv")

@@ -1,6 +1,7 @@
 """Hand-calculated speedup regressions; the draft is not a test oracle."""
 from dataclasses import replace
 import json
+from pathlib import Path
 import warnings
 
 import matplotlib.pyplot as plt
@@ -170,7 +171,7 @@ def test_line_coordinates_gaps_references_and_labels(config):
         assert list(lines) == ["Ideal (y=N)", "Base N=1", "Base", "S1_A", "S2_A"]
         assert ax.get_ylim()[0] == 0
         assert "dimensionless" in ax.get_ylabel()
-        assert all(text.get_text() == "n=1/1" for text in ax.texts)
+        assert not ax.texts  # n counts sit under the tick labels, not on the lines.
         assert not [s for c in ax.collections if hasattr(c, "get_segments")
                     for s in c.get_segments() if np.isfinite(s).all()]  # One rerun per cell: no CI, no bars.
     finally:
@@ -221,6 +222,8 @@ def test_invalid_pairing_creates_no_output(config):
     assert not config.output.exists()
 
 
+@pytest.mark.skipif(not (Path(__file__).parents[1] / "docs" / "jmh_sample.csv").exists(),
+                    reason="docs/jmh_sample.csv is gitignored and absent from this clone")
 def test_supplied_synthetic_ledger_supports_both_features():
     from pathlib import Path
     from src.config import load_config
@@ -243,3 +246,42 @@ def test_supplied_synthetic_ledger_supports_both_features():
     assert by_benchmark["mb1_rawNoFinalize"] == pytest.approx(3.094952301886, rel=1e-10)
     assert by_benchmark["mb2_rawFinalize"] == pytest.approx(3.094952301886363, rel=1e-10)
     assert individual.run_id.str.startswith("SYNTHETIC-").all()
+
+
+def _aggregate_render(config, rows, threads):
+    _, summary = prepare(pd.DataFrame(rows), config)
+    return render(summary, config, "mb1 — speedup, mean of reruns", threads=threads)
+
+
+def _two_reruns(strategy, threads, score):
+    return [observation(strategy, rerun, threads=threads, score=score + int(rerun == "B") * 10)
+            for rerun in ("A", "B")]
+
+
+def test_aggregate_speedup_errorbars_are_dark_thin_capped_and_on_top(config):
+    rows = _two_reruns("base", 1, 100) + _two_reruns("1a", 1, 100) + _two_reruns("1a", 2, 150)
+    fig = _aggregate_render(config, rows, [1, 2])
+    try:
+        ax = fig.axes[0]
+        bars = [c for c in ax.collections if hasattr(c, "get_segments") and len(c.get_segments())]
+        assert bars and all(c.get_linewidth()[0] == 1.2 for c in bars)
+        assert all(c.get_zorder() > max(line.get_zorder() for line in ax.lines
+                                                       if line.get_marker() != "_") for c in bars)
+        caps = [line for line in ax.lines if line.get_marker() == "_"]
+        assert caps and all(line.get_markeredgewidth() == 1.2 for line in caps)
+        assert "mean of reruns" in ax.get_title() and "average" not in ax.get_title().lower()
+    finally:
+        plt.close(fig)
+
+
+def test_plot_has_no_n_labels_and_partial_coverage_still_warns(config):
+    rows = (_two_reruns("base", 1, 100) + _two_reruns("1a", 1, 100) + _two_reruns("1a", 2, 150)
+            + _two_reruns("2a", 2, 150)[:1])
+    with pytest.warns(UserWarning, match="Incomplete coverage"):
+        fig = _aggregate_render(config, rows, [1, 2])
+    try:
+        labels = [t.get_text() for t in fig.axes[0].get_xticklabels()]
+        assert labels == ["1", "2"]
+        assert not fig.axes[0].texts
+    finally:
+        plt.close(fig)

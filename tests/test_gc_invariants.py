@@ -97,12 +97,12 @@ def make_config(tmp_path, ledger, **changes):
 def execute(config):
     """Run the command and load every written CSV: bench -> reruns / average / pivots."""
     paths = run(config)
-    assert len(paths) == (10 + len(config.formats)) * len(config.benchmarks)  # 10 CSVs + figure files
+    assert len(paths) == (10 + 2 * len(config.formats)) * len(config.benchmarks)  # 10 CSVs + two figures per format
     tables = {}
     for bench in config.benchmarks:
         stem = f"gc_{bench}_"
         mine = {p.name[len(stem):]: p for p in paths if p.name.startswith(stem)}
-        assert len(mine) == 10 + len(config.formats), sorted(mine)  # 10 CSVs + figure files
+        assert len(mine) == 10 + 2 * len(config.formats), sorted(mine)  # 10 CSVs + two figures per format
         tables[bench] = {
             "reruns": pd.read_csv(mine["r_all.csv"], dtype={"rerun": str, "strategy": str}),
             "average": pd.read_csv(mine["avg.csv"], dtype={"strategy": str}),
@@ -455,7 +455,7 @@ def test_every_missing_cell_has_a_warning_naming_it():
     assert missing_cells >= 9
     for _, row in averages.iterrows():                      # and the converse: no phantom warnings
         for metric in AVERAGED:
-            text = f"Average {metric} missing for {row['benchmark_short']}/{row['strategy']}/threads={row['threads_blobshuffle']}"
+            text = f"Mean of reruns of {metric} missing for {row['benchmark_short']}/{row['strategy']}/threads={row['threads_blobshuffle']}"
             assert pd.isna(row[metric]) == any(text in message for message in messages), text
     for column, row_number in flagged:                      # every warned cell is really missing
         match = observations[observations["source_row"] == row_number]

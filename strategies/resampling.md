@@ -9,6 +9,15 @@ Decisions made since the report:
 | Speedup across reruns | Ratio of means, resampling whole reruns |
 | CI method for across-reruns plots | **Plain percentile bootstrap (2.5% / 97.5%), with a t interval reported beside it.** The expanded percentile recommended below was not adopted: see the fact-check. |
 | Resamples | 10,000, Hesterberg's routine value |
+| Single-rerun throughput plots | Error bars are that rerun's ledger bounds, with no resampling. Ledger bounds are never resampled or averaged. |
+| Mean-of-reruns throughput plots | Bars are the mean of the rerun scores. The CI comes from resampling only those scores. |
+| Speedup single-rerun plots | No error bars |
+| Groups with no spread or fewer than two reruns | No CI, with a warning. Their label says `none`, and a title names error bars only if some are drawn. |
+| `gc_alloc_rate_norm` plot (built, `add-gc-alloc-plot`) | Bars of the mean of reruns, linear axis from zero, no log axis. CI is the same plain percentile bootstrap, 10,000 resamples, in two columns of the GC `_avg` CSV. Rerun values are taken in rerun order, so ledger row order cannot change the CI. |
+| Other GC metrics | No CI. `pauses_max` stays dots plus a median line, and `pauses_p99` stays in the table, not plotted. |
+| 2A vs 2B (built, `add-2a-2b-comparison`) | Paired log-t on per-rerun log(2A/2B), decided by the owner over Fieller. mb1 and mb2 are analysed separately. One verdict per thread count, at 99% and 98%. Cohen's d is dropped: see [notes_for_thesis.md](notes_for_thesis.md). The margin is 5%, set in `config.yaml`. |
+
+**Where this table and the report below differ, this table wins.** The report is kept as written, so it still recommends the expanded percentile, 50,000 resamples and rerun dots, and its thesis wording mentions the expanded percentile. None of those were adopted.
 
 Thesis changes that follow from this report are collected in [notes_for_thesis.md](notes_for_thesis.md). The simulation scripts it names live in a temporary session folder and may no longer exist.
 

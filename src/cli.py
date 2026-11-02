@@ -3,9 +3,10 @@ import argparse
 import sys
 
 COMMANDS = {
-    "thrpt": "Plot throughput for every rerun and the all-rerun average.",
-    "speedup": "Plot same-rerun baseline speedup and the all-rerun average.",
-    "gc": "Tabulate GC, pause and batch-fill metrics per rerun and the all-rerun average.",
+    "thrpt": "Plot throughput for every rerun and the mean of reruns.",
+    "speedup": "Plot same-rerun baseline speedup and the ratio of means across reruns.",
+    "gc": "Tabulate GC, pause and batch-fill metrics per rerun and as mean of reruns; plot pauses_max per rerun and gc_alloc_rate_norm as mean of reruns.",
+    "compare": "Tabulate the paired 2A vs 2B comparison with an equivalence verdict per thread count.",
     "help": "List project commands and their options.",
 }
 
@@ -74,3 +75,9 @@ def gc_main(argv=None):
     from .gc_metrics import run
 
     return _main("gc", run, argv)
+
+
+def compare_main(argv=None):
+    from .compare import run
+
+    return _main("compare", run, argv)

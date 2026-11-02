@@ -1,5 +1,6 @@
 """Shared ledger and output helpers, adapted from the legacy draft."""
 import csv
+import json
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -21,6 +22,9 @@ AVERAGE_PART = "avg"
 ALL_RERUNS_PART = "r_all"
 
 
+_MAX_FIELD_CHARS = 2**31 - 1
+
+
 def warn(message):
     warnings.warn(message, UserWarning, stacklevel=2)
 
@@ -39,7 +43,11 @@ def load_ledger(path, delimiter=None):
             if delimiter is None:
                 delimiter = csv.Sniffer().sniff(stream.read(65536), delimiters=",\t").delimiter
                 stream.seek(0)
-            header = next(csv.reader(stream, delimiter=delimiter), [])
+            limit = csv.field_size_limit(_MAX_FIELD_CHARS)  # JVM and JSON fields can be long.
+            try:
+                header, lines = _ledger_lines(csv.reader(stream, delimiter=delimiter))
+            finally:
+                csv.field_size_limit(limit)
         cleaned_header = [name.strip() for name in header]
         if len(set(cleaned_header)) != len(cleaned_header):
             raise ValueError("Ledger contains duplicate column names after trimming")
@@ -54,9 +62,30 @@ def load_ledger(path, delimiter=None):
         if "strategy" in frame.columns:
             raise ValueError("Ambiguous strategy: both unnamed first column and strategy exist")
         frame = frame.rename(columns={"Unnamed: 0": "strategy"})
-    frame["source_row"] = np.arange(len(frame)) + 2
+    if len(lines) != len(frame):
+        warn(f"Cannot match ledger lines to records in {path}; source_row values may be off")
+    frame["source_row"] = lines if len(lines) == len(frame) else np.arange(len(frame)) + 2
     frame["source_file"] = str(path.resolve())
     return frame
+
+
+def _ledger_lines(reader):
+    """Header and the first line of every record; blank lines count as lines but hold no record."""
+    header = next((fields for fields in reader if not _blank_record(fields)), [])
+    lines = []
+    previous = reader.line_num
+    for fields in reader:
+        if not _blank_record(fields):
+            if len(fields) > len(header):
+                raise ValueError(f"Ledger line {previous + 1} has {len(fields)} fields but the header "
+                                 f"has {len(header)}: a trailing delimiter, wrong delimiter or broken quote")
+            lines.append(previous + 1)
+        previous = reader.line_num
+    return header, lines
+
+
+def _blank_record(fields):
+    return len(fields) <= 1 and "".join(fields).strip() == ""
 
 
 def numeric(frame, column, *, optional=False):
@@ -151,13 +180,26 @@ def strategy_order(observations, config):
 
 
 _NUMERIC_SETTINGS = {
-    "threads_jmh", "forks", "warmup_iterations", "warmup_batch_size",
+    "forks", "warmup_iterations", "warmup_batch_size",
     "measurement_iterations", "measurement_jmh_internal_batchSize",
     "cfg_keyBytes", "cfg_valueBytes", "cfg_partitions", "cfg_batchDesiredBytes",
     "cfg_batchMaxDurationMs", "cfg_zones",
 }
 _TEXT_SETTINGS = {"benchmark", "jmh_version", "jdk_version", "vm_name", "vm_version", "jvm_args"}
 _DURATION_SETTINGS = {"warmup_time", "measurement_time"}
+# Differ by design inside one benchmark: the thread count, and the partition buffer only 1c sets.
+_VARYING_JVM_ARGS = ("-Dbench.threads=", "-Dbench.partitionBufferBytes=")
+
+
+def _comparable_jvm_args(text):
+    """jvm_args without the flags that vary by design; text that isn't a JSON list stays as it is."""
+    try:
+        arguments = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(arguments, list):
+        return text
+    return json.dumps([a for a in arguments if not str(a).startswith(_VARYING_JVM_ARGS)])
 
 
 _DURATION_FACTORS = {"ns": "1e-9", "us": "1e-6", "µs": "1e-6", "μs": "1e-6",
@@ -197,7 +239,33 @@ def _setting(value, column):
         if seconds is None:
             raise ValueError(f"Malformed comparison field {column}: {text}")
         return seconds
-    return text
+    return _comparable_jvm_args(text) if column == "jvm_args" else text
+
+
+def _jvm_flag(text, prefix):
+    """Value of one -D flag in a jvm_args JSON list, or None."""
+    try:
+        arguments = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(arguments, list):
+        return None
+    return next((str(a)[len(prefix):] for a in arguments if str(a).startswith(prefix)), None)
+
+
+def _check_varying_jvm_args(frame, benchmark):
+    """The flags ignored by the settings check must still agree with what the rows say."""
+    flags = frame["jvm_args"].map(lambda text: _jvm_flag(str(text), _VARYING_JVM_ARGS[0]))
+    wrong = flags.notna() & (pd.to_numeric(flags, errors="coerce")
+                             != pd.to_numeric(frame["threads_blobshuffle"], errors="coerce"))
+    if wrong.any():
+        raise ValueError(f"Incompatible settings in {benchmark}: -Dbench.threads differs from "
+                         f"threads_blobshuffle at ledger row(s) {frame.loc[wrong, 'source_row'].tolist()}")
+    buffers = frame["jvm_args"].map(lambda text: _jvm_flag(str(text), _VARYING_JVM_ARGS[1]))
+    varying = buffers.groupby(frame["strategy"]).nunique(dropna=False)
+    if (varying > 1).any():
+        raise ValueError(f"Incompatible settings in {benchmark}: -Dbench.partitionBufferBytes differs "
+                         f"within strategy {varying[varying > 1].index.tolist()}")
 
 
 def validate_comparability(frame):
@@ -215,13 +283,15 @@ def validate_comparability(frame):
                 differing.append(column)
         if differing:
             raise ValueError(f"Incompatible settings in {benchmark}: {', '.join(differing)}")
+        if "jvm_args" in group:
+            _check_varying_jvm_args(group, benchmark)
 
 
-def output_directory(parent):
+def output_directory(parent, feature):
     parent = Path(parent)
     parent.mkdir(parents=True, exist_ok=True)
     while True:
-        directory = parent / datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        directory = parent / (datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S") + f"_{feature}")
         try:
             directory.mkdir()
             return directory

@@ -6,6 +6,7 @@ n x 10000 index matrix from `integers`, `numpy.quantile` at 0.025 / 0.975).
 """
 from dataclasses import replace
 import hashlib
+import random
 import re
 import warnings
 
@@ -236,9 +237,15 @@ def cell_columns(result, strategy):
 
 
 def test_throughput_row_order_does_not_matter(config):
-    rows = two_reruns(scores=(100, 130, 170)) + two_reruns("1a", 2, (400, 520, 610))
+    # Ten reruns with non-lattice scores on a shuffled ledger: see also tests/test_review_fixes.py, which
+    # compares against a separate resampling. Three values would always give min and max, which proves nothing.
+    scores = [103.7, 98.2, 121.9, 87.4, 110.3, 95.8, 130.1, 101.6, 92.7, 116.4]
+    rows = [observation("base", f"{i:02d}", 1, s) for i, s in enumerate(scores, 1)] \
+        + [observation("1a", f"{i:02d}", 2, 4 * s) for i, s in enumerate(scores, 1)]
+    order = list(range(len(rows)))
+    random.Random(3).shuffle(order)
     _, forward = thrpt.prepare(pd.DataFrame(rows), config)
-    _, backward = thrpt.prepare(pd.DataFrame(rows[::-1]), config)
+    _, backward = thrpt.prepare(pd.DataFrame([rows[i] for i in order]), config)
     for strategy in ("base", "1a"):
         pd.testing.assert_frame_equal(cell_columns(forward, strategy), cell_columns(backward, strategy))
     assert forward[forward.strategy.eq("1a")].ci_low.notna().all()
@@ -291,9 +298,7 @@ def test_throughput_render_bars_match_ci_and_skip_nan(config):
         assert len(found) == 1  # "1a" has no spread, so no bar, in particular no zero-width bar
         np.testing.assert_allclose(found[0][:, 1], [100.0, 200.0])  # ci_low, ci_high
         assert ax.get_title().endswith(f"Error bars: {METHOD}")
-        assert [text.get_text() for text in ax.texts] == ["n=2/2", "n=2/2"]
-        by_height = sorted(text.xy[1] for text in ax.texts)
-        assert by_height == [200.0, 500.0]  # above ci_high for base, above the bar for "1a"
+        assert not ax.texts  # No n labels on the plot.
     finally:
         plt.close(fig)
 
@@ -316,7 +321,7 @@ def test_throughput_per_rerun_bars_still_use_ledger_bounds(config):
         ax = fig.axes[0]
         found = sorted(segments(ax), key=lambda s: s[0, 1])
         np.testing.assert_allclose([s[:, 1] for s in found], [[90, 110], [450, 550]])
-        assert ax.get_title().endswith("Error bars: ledger confidence bounds")
+        assert ax.get_title().endswith("Error bars: 99.9% ledger confidence bounds")
     finally:
         plt.close(fig)
 
@@ -442,7 +447,8 @@ def test_speedup_render_error_bars_on_across_reruns_chart(config):
         np.testing.assert_allclose(found[0][:, 1], [1.5, 2.0])
         bars = [c for c in ax.collections if hasattr(c, "get_segments") and len(c.get_segments())]
         assert len(bars) == 1
-        assert tuple(bars[0].get_colors()[0]) == to_rgba("red")
+        assert tuple(bars[0].get_colors()[0]) == to_rgba("#222")  # dark bars, not the line colour
+        assert bars[0].get_linewidth()[0] == 1.2
         assert "Error bars: 95% percentile bootstrap of reruns" in ax.get_title()
     finally:
         plt.close(fig)
@@ -473,3 +479,37 @@ def test_speedup_csv_keeps_exact_seed_next_to_an_empty_one(config, tmp_path):
     expected = hashlib.sha256(b"42|mb1_rawNoFinalize|1a|2|speedup").digest()[:8]
     assert seeds["1a"] == str(int.from_bytes(expected, "big") % 2**63)
     assert pd.isna(seeds["base"])
+
+
+def test_throughput_title_uses_method_from_a_row_that_has_a_ci(config):
+    # "base" has no spread (no CI) and sorts first; "1a" has a CI.
+    frame = pd.DataFrame(two_reruns("base", 1, (100, 100)) + two_reruns("1a", 1, (100, 200)))
+    (_, result), _ = collect(thrpt.prepare, frame, config)
+    assert result.set_index("strategy").interval_kind.to_dict() == {"base": "none", "1a": METHOD}
+    fig = render_throughput(result, config)
+    try:
+        assert fig.axes[0].get_title().endswith(f"Error bars: {METHOD}")
+    finally:
+        plt.close(fig)
+
+
+def test_throughput_title_has_no_error_bars_line_without_any_ci(config):
+    frame = pd.DataFrame(two_reruns("base", 1, (100, 100)) + [observation("1a", "01", 1, 500)])
+    (_, result), _ = collect(thrpt.prepare, frame, config)
+    assert result.interval_kind.unique().tolist() == ["none"]
+    fig = render_throughput(result, config)
+    try:
+        assert "Error bars" not in fig.axes[0].get_title()
+    finally:
+        plt.close(fig)
+
+
+def test_speedup_title_has_no_error_bars_line_without_any_ci(config):
+    frame = pd.DataFrame([observation(rerun="01", score=100), observation("1a", "01", 2, 200)])
+    (_, summary), _ = collect(speedup.prepare, frame, config)
+    assert summary.ci_low.isna().all()
+    fig = speedup.render(summary, config, "Average", strategies=["base", "1a"], threads=[1, 2])
+    try:
+        assert "Error bars" not in fig.axes[0].get_title()
+    finally:
+        plt.close(fig)

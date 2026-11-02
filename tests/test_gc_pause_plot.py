@@ -640,8 +640,9 @@ def test_formats_saved_in_configured_order_and_figures_closed(config, formats, m
     assert [p.name for p in paths] == (
         [output_name(BENCH, s) for s in OLD_SUFFIXES]
         + [output_name(BENCH, "pauses_max_median.csv")]
-        + [output_name(BENCH, f"pauses_max.{f}") for f in formats])
-    assert len(set(paths)) == len(paths) == 10 + len(formats)
+        + [output_name(BENCH, f"pauses_max.{f}") for f in formats]
+        + [output_name(BENCH, f"gc_alloc_rate_norm.{f}") for f in formats])
+    assert len(set(paths)) == len(paths) == 10 + 2 * len(formats)
     assert len({p.parent for p in paths}) == 1
     for path in paths:
         assert path.is_file() and path.stat().st_size > 0
@@ -656,16 +657,17 @@ def test_two_benchmarks_give_twenty_csvs_and_two_pngs_in_contract_order(config):
     write_ledger(config, small_fixture() + ledger_rows(
         [("base", 1, "r1", 3), ("base", 1, "r2", 5), ("1a", 1, "r1", 2), ("1a", 1, "r2", 4)], benchmark=BENCH2))
     paths = run(config)
-    assert len(paths) == 22 and len(set(paths)) == 22
+    assert len(paths) == 24 and len(set(paths)) == 24
     expected = []
     for benchmark in (BENCH, BENCH2):
         expected += ([output_name(benchmark, s) for s in OLD_SUFFIXES]
                      + [output_name(benchmark, "pauses_max_median.csv"),
-                        output_name(benchmark, "pauses_max.png")])
+                        output_name(benchmark, "pauses_max.png"),
+                        output_name(benchmark, "gc_alloc_rate_norm.png")])
     assert [p.name for p in paths] == expected
     assert sum(p.suffix == ".csv" for p in paths) == 20
-    assert sum(p.suffix == ".png" for p in paths) == 2
-    second = pd.read_csv(paths[-2])
+    assert sum(p.suffix == ".png" for p in paths) == 4
+    second = pd.read_csv(paths[-3])
     assert second["pauses_max_median"].tolist() == [4.0, 3.0]     # base (3 + 5) / 2; 1a (2 + 4) / 2
     assert plt.get_fignums() == []
 
@@ -733,5 +735,5 @@ def test_show_only_when_requested_and_figure_still_closed(config, monkeypatch, s
     monkeypatch.setattr(plt, "show", lambda *a, **k: seen.append(len(plt.get_fignums())))
     write_ledger(config, small_fixture())
     run(replace(config, show=show))
-    assert seen == ([1] * calls)                     # one figure open at show time
+    assert seen == ([1] * 2 * calls)                 # one figure open at show time, for the pauses and the allocation plot
     assert plt.get_fignums() == []

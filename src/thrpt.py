@@ -3,16 +3,22 @@ import json
 
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import FuncFormatter
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
                     AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
                     output_stem, rerun_part, save_figure, strategy_order, t_interval, warn)
 
 
+LEDGER_BOUNDS = "ledger confidence bounds"
+LEDGER_LEVEL = "99.9%"  # JMH's confidence level, per the ledger's legend.
+
+
 def prepare(frame, config):
     """Return normalized observations and mean of reruns with a resampled CI."""
     observations = normalize_throughput(frame, config.benchmarks, config.labels)
-    observations["interval_kind"] = "ledger confidence bounds"
+    has_bounds = observations["score_confidence_low"].notna() & observations["score_confidence_high"].notna()
+    observations["interval_kind"] = np.where(has_bounds, LEDGER_BOUNDS, "none")
     observations["n_reruns"] = 1
     totals = observations.groupby("benchmark_short")["rerun"].nunique()
     observations["total_reruns"] = observations["benchmark_short"].map(totals)
@@ -24,7 +30,8 @@ def prepare(frame, config):
         total = int(totals[benchmark])
         if count < total:
             warn(f"Incomplete coverage: {benchmark}/{strategy}/threads={threads}: {count}/{total} reruns")
-        scores = group["score"].to_numpy()
+        # Sorted by rerun for the CI only, so the result does not depend on ledger row order.
+        scores = group.sort_values("rerun", kind="stable")["score"].to_numpy()
         ci = {name: np.nan for name in ("ci_low", "ci_high", "t_low", "t_high",
                                         "ci_method", "ci_resamples", "ci_seed")}
         ci["ci_seed"] = pd.NA  # Seeds exceed 2**53, so a float column would round them.
@@ -39,7 +46,7 @@ def prepare(frame, config):
             "benchmark_short": benchmark, "strategy": strategy, "threads_blobshuffle": threads,
             "score": group["score"].mean(), "score_unit": "ops/s",
             **ci,
-            "interval_kind": CI_METHOD, "n_reruns": count, "total_reruns": total,
+            "interval_kind": CI_METHOD if ci["ci_method"] == CI_METHOD else "none", "n_reruns": count, "total_reruns": total,
             "contributing_reruns": json.dumps(group["rerun"].tolist()),
             "source_rows": json.dumps(group["source_row"].astype(int).tolist()),
             "source_files": json.dumps(group["source_file"].unique().tolist()) if "source_file" in group else "[]",
@@ -79,15 +86,15 @@ def render(table, config, title, *, strategies=None, threads=None):
             err = np.vstack([valid["score"] - valid[low_col], valid[high_col] - valid["score"]])
             ax.errorbar(x[complete.to_numpy()], valid["score"], yerr=err, fmt="none",
                         color="#444", elinewidth=1.5, capsize=4, zorder=3)
-        if aggregate:
-            for xi, (_, row) in zip(x, data.iterrows()):
-                y = row["ci_high"] if pd.notna(row["ci_high"]) else row["score"]
-                ax.annotate(f"n={row['n_reruns']}/{row['total_reruns']}", (xi, y),
-                            xytext=(0, 4), textcoords="offset points", ha="center", fontsize=7)
     ax.set_xticks(np.arange(len(threads)), threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel("Throughput (ops/s)")
-    ax.set_title(f"{title}\nError bars: {table['interval_kind'].iloc[0]}")
+    kinds = table.loc[table["interval_kind"].ne("none"), "interval_kind"]
+    kind = kinds.iloc[0] if len(kinds) else None
+    if kind == LEDGER_BOUNDS:
+        kind = f"{LEDGER_LEVEL} {kind}"
+    ax.set_title(f"{title}\nError bars: {kind}" if kind else title)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.0f}"))
     ax.set_ylim(bottom=0)
     ax.margins(y=0.15)
     ax.grid(axis="y", color="#ddd", zorder=0)
@@ -102,16 +109,16 @@ def run(config):
     observations, averages = prepare(load_ledger(config.ledger, config.delimiter), config)
     benchmark_names = file_names(config.benchmarks, "benchmark")
     rerun_names = file_names(observations["rerun"].unique(), "rerun")
-    directory = output_directory(config.output)
+    directory = output_directory(config.output, "thrpt")
     paths = []
     for benchmark in config.benchmarks:
         data = observations[observations["benchmark_short"].eq(benchmark)]
         summary = averages[averages["benchmark_short"].eq(benchmark)]
         order = strategy_order(data, config)
         threads = sorted(data["threads_blobshuffle"].unique())
-        tables = [(rerun_part(rerun_names[rerun]), f"{benchmark} — rerun {rerun}", group)
+        tables = [(rerun_part(rerun_names[rerun]), f"{benchmark} — throughput, rerun {rerun}", group)
                   for rerun, group in data.groupby("rerun", sort=False)]
-        tables.append((AVERAGE_PART, f"{benchmark} — average across all reruns", summary))
+        tables.append((AVERAGE_PART, f"{benchmark} — throughput, mean of reruns", summary))
         for suffix, title, table in tables:
             stem = directory / output_stem("thrpt", benchmark_names[benchmark], suffix)
             csv_path = stem.with_suffix(".csv")

@@ -66,11 +66,42 @@ Details are in [resampling.md](resampling.md).
 
 Full details and citations are in [comparison_2a_2b.md](comparison_2a_2b.md). The procedure is not final until the decisions in the plan `add-2a-2b-comparison` are made.
 
-### Cohen's d
+### Interval method (owner decision, 2026-11-01)
 
-§2.2.4 p.11 says: "Cohen's d … divides the difference of two means by their pooled standard deviation [25]."
+The owner chose paired log-t over Fieller, unless review shows log-t is seriously harmful.
 
-The old 2A vs 2B idea instead divided the mean log ratio by the SD of the log ratios, which is a different quantity. The research recommends dropping d and reporting the ratio with its CI. If so, replace "…so it complements the ratio rather than replacing it." with "…so this thesis reports the ratio and its confidence interval instead [38, Baguley]."
+- **§2.2.4 p.11 stays:** "ratios are usually analyzed on a logarithmic scale" already fits log-t.
+- **To state in the methods:** this table reports a geometric mean ratio, while the speedup plots use a ratio of means. [35] Rule 4 prefers summarising the rates when they are available, so say why log-t is used here.
+- **If this ever changes to Fieller:** reword that §2.2.4 sentence, and note that Kalibera & Jones [38] §10.1 use Fieller without pairing.
+
+### Cohen's d: dropped (owner decision, 2026-11-01)
+
+The 2A vs 2B table reports the ratio with its interval, and the SD of log ratios. It does not report Cohen's d.
+
+**Why**
+
+| Reason | Basis |
+|---|---|
+| The ratio with its interval already is the effect size, in units a reader can use | Kalibera & Jones [38]; Baguley 2009, who favours simple effect sizes "for most purposes" (abstract only checked) |
+| There are several versions of d. §2.2.4 defines pooled d, and the old idea file computes d_z. On the invented worked example they give 0.42 and 1.26 | Our calculation, not citable |
+| d_z is only t/√n, so it adds nothing to the paired test | Lakens 2013, who also recommends against it as the default |
+| Correlation between paired runs inflates d_z | Dunlap et al. 1996, in a meta-analysis context (abstract only checked) |
+| With low benchmark noise, a tiny gap gives a large d, and d is undefined when there is no spread. In the worked example the verdict is "equivalent" while d_z reads as "large" | §2.2.4 makes the same point about low variance; the example is our inference |
+| The denominator is this one machine's noise, so d does not transfer to other setups | Our inference |
+| Cohen's small, medium and large labels "are arbitrary" | Lakens 2013 |
+
+**The thesis must disclose this:** Hoefler & Belli [35] recommend a standardized effect size, in an unpaired ANOVA section. Georges et al. [28] and Kalibera & Jones [38] do not use d. A limited search found no ranked performance paper using d in a design like this, which does not prove none exists.
+
+**Change needed:** §2.2.4 p.11 defines d and says "so it complements the ratio rather than replacing it." Suggested replacement for that clause:
+
+> Hoefler and Belli [35] recommend a standardized effect size. The units here are directly meaningful and the rerun spread is specific to this machine, so this thesis reports the ratio and its confidence interval [38, Baguley].
+
+**References to add**
+- T. Baguley, "Standardized or Simple Effect Size: What Should Be Reported?", British Journal of Psychology 100:603-617, 2009. doi:10.1348/000712608X377117
+- W. P. Dunlap, J. M. Cortina, J. B. Vaslow, M. J. Burke, "Meta-Analysis of Experiments with Matched Groups or Repeated Measures Designs", Psychological Methods 1(2):170-177, 1996. doi:10.1037/1082-989X.1.2.170
+- D. Lakens, "Calculating and Reporting Effect Sizes to Facilitate Cumulative Science", Frontiers in Psychology 4:863, 2013. doi:10.3389/fpsyg.2013.00863. Below the project's venue bar on some rankings, so do not rely on it alone.
+
+**Citation caution:** [38] is CORE C, so don't use it as the only support.
 
 ### Equivalence
 

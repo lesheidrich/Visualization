@@ -1,0 +1,61 @@
+TODO (written 2026-11-02)
+
+┌───────────────────────┬──────────────────────────────────────────────────────────────────────────────────────┐
+│         Item          │                                        Status                                        │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ Tail latency          │ You said later. It gets its own table and plot from the sample rows. docs/ledger_all │
+│                       │ .xlsx now has real sample rows to try it on                                          │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ batch_fill plot       │ Your notes list it (lines 9 and 155), but it's only in the table so far              │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ gc_count and gc_time  │ Your notes list them (line 10), but they're only in the table so far                 │
+│ plots                 │                                                                                      │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ Stdev or CV %         │ Undecided: your notes drop CV % on line 30 but propose it on lines 121–128           │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ Paired ratios between │ From your questions on lines 34 and 106, which ask whether one strategy beats        │
+│  strategies           │ another. Bars alone can't answer that                                                │
+├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ Drift check           │ Your notes want trends checked before averaging (lines 71–73). The fork and          │
+│                       │ iteration part would need ledger_raw, which these commands don't read                │
+└───────────────────────┴──────────────────────────────────────────────────────────────────────────────────────┘
+
+Two things outside your list that also need doing:
+- Real ledger: run everything on it when your runs finish. docs/ledger_all.xlsx was the first real-format test (one rerun).
+- Excel: the commands read CSV or TSV only, so an .xlsx ledger must be exported first.
+
+Ideas from research_questions.txt. Not built. Nobody has decided whether to build them.
+
+[ ] Tail latency
+    The owner said later. Its own table and plot, from the `sample` rows. Never joined onto `thrpt` rows.
+    docs/ledger_all.xlsx has real sample rows (one rerun). Still to pick: which percentiles.
+    Do not put bars on a log axis. Notes line 113 proposes that.
+
+[ ] batch_fill plot
+    Notes lines 9 and 155. Only in the table so far.
+
+[ ] gc_count and gc_time plots
+    Notes line 10. Only in the table so far.
+    Raw gc_count favours slower strategies, because faster ones do more work and collect more often.
+
+[ ] Stdev or CV %
+    Undecided. Notes drop CV % on line 30 but propose it on lines 121-128. Raw stdev is on line 119.
+
+[ ] Paired ratios between strategies
+    Notes lines 34 and 106 ask whether one strategy beats another. Bars alone can't answer that.
+    Could reuse the 2A vs 2B log-ratio code. They'd describe the gap without giving verdicts, and need no new runs.
+
+[ ] Drift check
+    Notes lines 71-73 want trends checked before averaging.
+    The fork and iteration part would need ledger_raw, which these commands don't read.
+
+Outside the list, also needed.
+
+[ ] Run everything on the real ledger when the final runs finish
+    docs/ledger_all.xlsx gave a first test (one rerun, 64 partitions): all commands run.
+    Seen there: aux_recordBytes / score is 1016 bytes on every thrpt row, and the file's legend says
+    score is records per ms and pauses_* and gc_time are in ms.
+    Still to check on the final ledger: no reruns or jobs are missing, and order_unbalanced.
+
+[ ] Excel ledgers
+    The commands read CSV or TSV only. docs/ledger_all.xlsx had to be exported first.

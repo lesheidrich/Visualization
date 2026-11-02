@@ -16,6 +16,8 @@ uv run help
 uv run thrpt --help
 uv run thrpt
 uv run speedup
+uv run gc
+uv run compare
 uv run pytest
 ```
 
@@ -43,7 +45,8 @@ strategies cover 1, 2, 4, 6, and 8 threads. Its original 70-column schema is ret
 Every row is marked `SYNTHETIC` in provenance fields. These invented values are
 software test data, including their supplied bounds and auxiliary metrics; they
 do not establish performance rankings or valid statistical confidence intervals.
-Both `uv run thrpt` and `uv run speedup` work with the supplied configuration.
+All of `uv run thrpt`, `speedup`, `gc` and `compare` work with the supplied configuration and sample.
+`docs/` is not in the repository (it is gitignored), so a clone has no sample ledger: set `input.path` in `config.yaml` to your own ledger.
 
 ## Ledger input
 
@@ -57,31 +60,40 @@ Throughput requires `benchmark_short`, `mode`, `rerun`, `threads_blobshuffle`,
 `score`, and `score_unit`, plus the strategy column. Standard decimal/scientific
 numeric notation is accepted. Threads must be positive integral numbers, including
 spellings such as `2.0`. Scores must be nonnegative finite numbers. Units `ops/s`,
-`ops/ms`, `ops/us`, `ops/µs`, and `ops/μs` are converted to `ops/s` before averaging.
-Other metrics are left untouched. Blank confidence bounds omit the relevant error
+`ops/ms`, `ops/us`, `ops/µs`, and `ops/μs` are converted to `ops/s` before the mean of reruns is taken.
+Other metrics are left untouched, so `stdev_agg_forks`, `stdevs`, `stdev_p99_est` and `p0` to `p100` in the
+per-rerun CSVs stay in the ledger's unit beside a `score` in ops/s. `score` in the GC tables and `mean_2a` and
+`mean_2b` in the comparison table are ops/s. Blank confidence bounds omit the relevant error
 bars with a warning; malformed nonblank values fail with row/column diagnostics.
+`source_row` is the ledger line (header is line 1, blank lines count). A data row with more
+fields than the header, such as a trailing comma, fails with its line number.
 
 One observation is allowed per benchmark/strategy/thread/rerun. Duplicate rows
 fail rather than overweight a rerun. Comparison-defining workload/JMH settings
 must agree within each benchmark; a mismatch lists the offending fields. Numeric
 settings compare numerically; warmup/measurement durations accept ns/us/µs/μs/ms/s/m/h
-(a bare number means seconds). Revision, host, timestamp and run metadata can vary.
-Different thread counts are never averaged together. Unknown strategy identifiers
+(a bare number means seconds). `-Dbench.threads` and `-Dbench.partitionBufferBytes`
+in `jvm_args` differ by design and are ignored, but a thread flag that contradicts its row's
+`threads_blobshuffle`, or a buffer flag that varies within a strategy, still fails. Revision, host, timestamp and run metadata can vary.
+Different thread counts are never combined into one mean. Unknown strategy identifiers
 remain visible with a warning. Labels, order and colour keys use canonical
 strategy identifiers (trimmed lowercase, with a final `.0` removed), not labels.
 
 ## Output names
 
-Each run writes to `out/YYYY-MM-DD_HH-MM-SS/` (UTC, to the second). If that folder exists, the
-run waits for the next free second, so it never overwrites anything. All features name files
+Each run writes to `out/YYYY-MM-DD_HH-MM-SS_<feature>/` (UTC, to the second), where the feature
+is `thrpt`, `speedup`, `gc_pauses` or `compare` (`uv run gc` writes to `..._gc_pauses/`). If that folder
+exists, the run waits for the next free second, so it never overwrites anything. All features name files
 `<feature>_<benchmark>_<part>`:
 
 | File | Contents |
 |---|---|
 | `thrpt_mb1_rawNoFinalize_r05.png` | Throughput, rerun 05 |
 | `speedup_mb1_rawNoFinalize_avg.csv` | Speedup, summary across all reruns |
+| `compare_mb1_rawNoFinalize_avg.csv` | 2A vs 2B comparison, one row per thread count |
 | `gc_mb1_rawNoFinalize_r_all.csv` | GC metrics, one row per strategy, thread count and rerun |
 | `gc_mb1_rawNoFinalize_gc_time_pivot.csv` | GC time, strategy by thread count |
+| `gc_mb1_rawNoFinalize_gc_alloc_rate_norm.png` | gc_alloc_rate_norm, mean of reruns |
 
 Unsafe characters in a benchmark or rerun name become underscores. If two names would then
 match, ignoring case, the command stops with an error before writing anything.
@@ -89,17 +101,17 @@ match, ignoring case, the command stops with an error before writing anything.
 ## Throughput results
 
 For each benchmark, the command writes one grouped bar chart and CSV per rerun,
-plus an average chart and CSV over **all** reruns present for that benchmark.
+plus a mean-of-reruns chart and CSV over **all** reruns present for that benchmark.
 The x-axis is BlobShuffle threads, bars distinguish strategies, and the y-axis
 uses ops/s. Counts are dynamic. There is no rerun selector, outlier removal,
 median option, or weighting by fork count. Missing strategy/thread combinations
 stay missing; incomplete coverage produces a warning and contributor counts.
 
 Per-rerun error bars use `score_confidence_low` and `score_confidence_high` from
-the ledger. The across-reruns bar is the **mean of reruns**. Its error bars are a
+the ledger, JMH's 99.9% interval; a row without them gets `interval_kind` `none`. The across-reruns bar is the **mean of reruns**. Its error bars are a
 95% percentile bootstrap of the rerun scores: 10,000 resamples of whole reruns,
-with a fixed seed (42, combined with benchmark, strategy and threads) so repeat
-runs give identical values. Ledger bounds do not contribute. For scores 100 and
+with a fixed seed (42, combined with benchmark, strategy and threads) and the scores
+taken sorted by rerun name, so repeat runs and a reordered ledger give identical values. Ledger bounds do not contribute. For scores 100 and
 200 the resampled means are 100, 150 or 200, so the CI is [100, 200]. The CSV
 also holds a 95% t interval on the same scores; the plot draws only the bootstrap
 CI. With ten reruns the real coverage of the percentile bootstrap is about 90% on
@@ -107,7 +119,9 @@ normal data (our own calculation), not 95%, so the t interval is reported beside
 it. The reruns share one instance, so the CI describes variation on this machine
 in this period. A group with fewer than two reruns, or with no spread, gets no CI
 and a warning (`No CI for <bench>/<strategy>/threads=<N>: ...`). If a ledger score
-has no bounds, only its per-rerun bar loses error bars.
+has no bounds, only its per-rerun bar loses error bars. Plots carry no n labels.
+A missing rerun gives an `Incomplete coverage` warning, and the CSV keeps
+`n_reruns` and `total_reruns`.
 
 CSV fields include benchmark, canonical strategy, `threads_blobshuffle`, score,
 bounds, `score_unit`, `interval_kind`, `n_reruns`, `total_reruns`, and JSON-encoded
@@ -125,7 +139,7 @@ Fix the ledger or configuration and rerun; values are not silently discarded.
 
 ## Speedup results
 
-`uv run speedup` writes one line chart and CSV per benchmark/rerun, plus an average
+`uv run speedup` writes one line chart and CSV per benchmark/rerun, plus a ratio-of-means
 chart and CSV across all reruns. It pairs within the same benchmark and rerun:
 
 ```
@@ -145,7 +159,7 @@ is 250 / 150 ≈ **1.667**. This differs from the mean of per-rerun ratios
 ([2, 1.5] gives 1.75), which is not used. All available reruns contribute; there
 is no rerun filter or hardcoded run count. Missing numerator observations stay
 missing, produce a coverage warning, and contribute no invented zero; their
-base scores are left out of the base mean. Aggregate points show n/total.
+base scores are left out of the base mean. Plots show no n labels; check coverage in the `Incomplete coverage` warning and the `n_reruns` and `total_reruns` columns.
 
 Each benchmark/rerun must have exactly one positive, finite base score at one
 thread. Missing, duplicate, zero, or negative baselines fail before output
@@ -159,7 +173,7 @@ y=N, and a horizontal reference y=1. Missing points leave gaps. Configured
 labels, order, and colors are consistent across a benchmark's outputs. The ideal
 line is a scaling reference; the shape alone does not establish a cause such as
 contention. Filename stems begin with `speedup_` and distinguish benchmark,
-rerun, and average; each invocation gets a new directory.
+rerun, and ratio of means across reruns; each invocation gets a new directory.
 
 Individual CSVs contain `benchmark_short`, `strategy`, `threads_blobshuffle`,
 `rerun`, normalized numerator `score` and `score_unit`, `baseline_score` in ops/s,
@@ -197,7 +211,7 @@ and settings-compatibility checks) and writes CSVs plus one figure per benchmark
 benchmark: `gc_<benchmark>_r_all.csv` (one row per strategy, thread count and
 rerun, with every calculation input and the source row/file),
 `gc_<benchmark>_avg.csv`, and `gc_<benchmark>_<metric>_pivot.csv` (strategy
-by thread count, built from the averages) for `gc_alloc_rate_norm`, `gc_count`,
+by thread count, built from the means of reruns) for `gc_alloc_rate_norm`, `gc_count`,
 `gc_time`, `gc_time_pct`, `pauses_max`, `pauses_p99` and `batch_fill`.
 
 Taken from the ledger without rescaling: `gc_alloc_rate_norm` (B/op),
@@ -230,13 +244,17 @@ leaves `batch_bytes` and `batch_fill` empty). Zero `aux_batches` leaves
 `batch_bytes` and `batch_fill` empty with a warning. `gc_time_pct` above 100 %
 warns.
 
-Averages are the unweighted arithmetic mean over all reruns of a benchmark,
-strategy and thread count, with `n_reruns`, `total_reruns` and the contributing
+The mean of reruns is the unweighted arithmetic mean over all reruns of a benchmark,
+strategy and thread count (`gc_<benchmark>_avg.csv`), with `n_reruns`, `total_reruns` and the contributing
 reruns (incomplete coverage warns, as in `thrpt`). If any contributor lacks a
-metric, that metric's average is empty and a warning is printed. Note that the
-average `pauses_max` is the **mean of the per-rerun maxima**, not a maximum;
-use the per-rerun CSV for the worst case. Only averages are produced: no
-confidence intervals, medians or other statistics.
+metric, that metric's mean is empty and a warning is printed. Note that the
+mean `pauses_max` is the **mean of the per-rerun maxima**, not a maximum;
+use the per-rerun CSV for the worst case. Only `gc_alloc_rate_norm` has a resampled CI,
+in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high` (last two columns of the
+`_avg` CSV): the 95% percentile bootstrap of the rerun values, 10,000 resamples, seeded per
+benchmark, strategy and thread count as for throughput. A group with fewer than two reruns,
+no spread, or a blank rerun value has blank CI values and a warning naming the group.
+No other metric has a CI.
 
 ### pauses_max dot plot
 
@@ -254,3 +272,46 @@ Zero and blank `pauses_max` values cannot be shown on a log axis and are omitted
 from the plot and the medians (zeros print a warning naming the ledger rows; blanks
 already warn). A group without any positive value has no dots, no median line and
 no CSV row. The median is of the per-rerun maxima, not a maximum.
+
+### gc_alloc_rate_norm bar plot
+
+Per benchmark, `gc` also writes `gc_<benchmark>_gc_alloc_rate_norm.<fmt>` (one file per
+format in `output.formats`). Bars are the mean of reruns in B/op, raw, on a linear
+y-axis from zero (no log scale). X-axis is BlobShuffle threads; strategy order, labels
+and colours are the configured ones. Error bars are the resampled CI from the `_avg`
+CSV and are drawn only where it is not blank; the title says so on a second line. A
+strategy with no mean at a thread count has no bar there, and the strategies present
+are centred in that group, as on the pauses_max plot. There are no per-rerun allocation plots.
+
+## 2A vs 2B comparison
+
+`uv run compare [--config PATH]` compares strategies 2A and 2B (they differ only in merge
+order) per benchmark and thread count. It draws no plot and writes one table per benchmark,
+`compare_<benchmark>_avg.csv`, into `..._compare/`, thread counts ascending.
+
+For each rerun it takes y = ln(2a score / 2b score) from the same rerun. With n reruns, the mean
+of y and the sample SD s give the paired log-t interval exp(mean y -/+ t * s / sqrt(n)), t with
+n - 1 degrees of freedom. `logt_ratio` is exp(mean y); `ratio_of_means` is mean(2a) / mean(2b),
+the same number the speedup plots use. With F thread counts in the benchmark, alpha = 0.05 / F:
+the difference interval has level 1 - alpha and the equivalence interval 1 - 2 * alpha (99% and
+98% for five thread counts). The two benchmarks are analysed separately. `smallest_provable_margin`
+is the smallest margin for which the row would count as equivalent. The 95% bootstrap, SD of log
+ratios (`sd_log_ratio_pct`, in percent) and `reruns_2a_gt_2b` are for reference and never decide.
+
+The verdict is the first match of: `no spread observed` (the per-rerun ratios are identical apart
+from rounding, so intervals and margin are empty); `equivalent` (equivalence interval inside
+1/(1+m) to 1+m); `2A faster` (difference interval above 1); `2B faster` (below 1);
+`inconclusive`. The margin m is `comparison.margin` in `config.yaml` (a fraction, 0.05 shipped,
+reasoning in the comment there). Without it, `equivalent` is never issued and a warning says so.
+Error rates are nominal: they assume independent reruns and roughly normal log ratios.
+
+Every rerun seen for either strategy must exist for both at every thread count, with positive
+scores and at least two reruns; otherwise the command fails naming benchmark, thread count and
+rerun, and writes nothing. It warns when there are not 10 reruns. `flags` (separated by `;`)
+never change numbers: `host_differs`, `sha_differs`, `dirty_build` (`git_dirty` not false, blank
+included), `work_differs` (mean `aux_recordBytes` / original score differs by more than 0.1%),
+`order_unbalanced` (counts of 2A-first and 2B-first differ by more than 2) and `order_unknown`
+(a missing, unparsable or tied `run_timestamp`). `order_2a_first` and
+`order_adjusted_ratio_geo` (exp of the intercept of y regressed on +1/-1 for 2A first/second)
+are reported only. The sample ledger is synthetic and has no spread between 2A and 2B, so every
+row there says `no spread observed`.

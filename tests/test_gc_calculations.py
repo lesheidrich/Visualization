@@ -23,6 +23,8 @@ def quiet_prepare(rows, config):
     """Run prepare and fail on any UserWarning (the input is meant to be clean)."""
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
+        # The new alloc-CI warning is intended for these one-rerun inputs; every other warning still fails.
+        warnings.filterwarnings("ignore", message=r"No gc_alloc_rate_norm CI for ", category=UserWarning)
         return prepare(pd.DataFrame(rows), config)
 
 
@@ -392,7 +394,7 @@ def test_missing_contributor_blanks_only_its_metric_average(config, blank):
     average = averages.iloc[0]
     for metric in MISSING[blank]:
         assert pd.isna(average[metric]), metric
-        assert f"Average {metric} missing for {BENCH}/base/threads=1: a contributor lacks {metric}" in text
+        assert f"Mean of reruns of {metric} missing for {BENCH}/base/threads=1: a contributor lacks {metric}" in text
     for metric, expected in SURVIVING[blank].items():
         assert average[metric] == pytest.approx(expected, **APPROX), metric
     # Per-rerun values of the other contributors stay present.
@@ -483,7 +485,8 @@ def test_observation_columns_and_order(config):
         "n_reruns", "total_reruns", "contributing_reruns", "source_row", "source_file"]
     assert averages.columns.tolist() == [
         "benchmark_short", "strategy", "threads_blobshuffle", *AVERAGED, "n_reruns", "total_reruns",
-        "contributing_reruns", "source_rows", "source_files", "original_strategies", "summary_kind"]
+        "contributing_reruns", "source_rows", "source_files", "original_strategies", "summary_kind",
+        "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high"]
 
 
 # ---------------------------------------------------------------- pivots

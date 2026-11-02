@@ -79,7 +79,7 @@ def test_plot_uses_prepared_values_bounds_labels_and_missing_positions(config):
     frame = load_ledger(Path(__file__).parent / "fixtures/throughput.csv")
     _, averages = prepare(frame, config)
     config = replace(config, colors={"base": "red", "1a": "blue"})
-    fig = render(averages, config, "Average", strategies=["base", "1a"], threads=[1, 2])
+    fig = render(averages, config, "mb1 — mean of reruns", strategies=["base", "1a"], threads=[1, 2])
     try:
         ax = fig.axes[0]
         assert [bar.get_height() for bar in ax.patches] == [150, 500]
@@ -88,6 +88,8 @@ def test_plot_uses_prepared_values_bounds_labels_and_missing_positions(config):
         assert ax.get_xlabel() == "BlobShuffle threads"
         assert ax.get_ylabel() == "Throughput (ops/s)"
         assert "Error bars: 95% percentile bootstrap of reruns" in ax.get_title()
+        assert "mean of reruns" in ax.get_title() and "average" not in ax.get_title().lower()
+        assert not ax.texts  # No n labels on the plot.
         assert ax.get_ylim()[0] == 0
         assert [text.get_text() for text in ax.get_legend().get_texts()] == ["Base", "S1_A"]
         segments = [segment for collection in ax.collections for segment in collection.get_segments()]

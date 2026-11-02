@@ -1,3 +1,5 @@
+> Owner decisions of 2026-11-01 override this report: paired log-t decides (no Fieller), no Cohen's d, no primary benchmark, no plot. See `openspec/changes/archive/2026-11-02-add-2a-2b-comparison/design.md`.
+
 # 2A vs 2B comparison
 
 The research agent's full report from 2026-11-01, unedited below the line. It is planned as OpenSpec change `add-2a-2b-comparison`. Its thesis changes are summarized in [notes_for_thesis.md](notes_for_thesis.md). The simulation scripts it names live in a temporary session folder and may no longer exist.

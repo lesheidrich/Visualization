@@ -27,6 +27,7 @@ class Config:
     figsize: tuple[float, float] = (12, 6)
     dpi: int = 150
     show: bool = False
+    comparison_margin: float | None = None
 
 
 def _mapping(value, location, allowed=None):
@@ -55,11 +56,17 @@ def load_config(path):
         raw = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid YAML in {path}: {exc}") from exc
-    raw = _mapping(raw, "config", {"input", "output", "benchmarks", "strategies", "plot"})
+    raw = _mapping(raw, "config", {"input", "output", "benchmarks", "strategies", "plot", "comparison"})
     source = _mapping(raw.get("input", {}), "input", {"path", "delimiter"})
     output = _mapping(raw.get("output", {}), "output", {"directory", "formats"})
     strategies = _mapping(raw.get("strategies", {}), "strategies", {"labels", "order", "colors"})
     plot = _mapping(raw.get("plot", {}), "plot", {"figsize", "dpi", "show"})
+
+    comparison = _mapping(raw.get("comparison", {}), "comparison", {"margin"})
+    margin = comparison.get("margin")
+    if "margin" in comparison and (isinstance(margin, bool) or not isinstance(margin, (int, float))
+                                   or not 0 < margin < 1):
+        raise ValueError("comparison.margin must be a number greater than 0 and less than 1 (a fraction, not a percent)")
 
     def resolve(value, name):
         if not isinstance(value, str) or not value.strip():
@@ -97,4 +104,5 @@ def load_config(path):
     if type(show) is not bool:
         raise ValueError("plot.show must be true or false")
     return Config(ledger, destination, None if delimiter == "auto" else delimiter,
-                  benchmarks, labels, order, colors, formats, tuple(size), dpi, show)
+                  benchmarks, labels, order, colors, formats, tuple(size), dpi, show,
+                  None if margin is None else float(margin))
