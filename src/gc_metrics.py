@@ -114,7 +114,8 @@ def prepare(frame, config):
     if over.any():
         warn(f"gc_time_pct above 100 % at ledger row(s) {_rows(observations, over)}")
     zero = observations["aux_batches"].eq(0)
-    all_zero = {b for b, z in zero.groupby(observations["benchmark_short"]) if z.all()}
+    known = observations["aux_batches"].notna()  # A blank has its own warning.
+    all_zero = {b for b, z in zero[known].groupby(observations.loc[known, "benchmark_short"]) if z.all()}
     # NoFinalize benchmarks close no batch by design, so all zeros say nothing is wrong there.
     expected = {b for b in all_zero if "NoFinalize" in b}
     for benchmark in sorted(all_zero - expected):
@@ -147,7 +148,7 @@ def prepare(frame, config):
         for metric in AVERAGED:
             if group[metric].notna().all():
                 record[metric] = group[metric].mean()
-            elif benchmark in all_zero and metric in ("batch_bytes", "batch_fill"):
+            elif benchmark in all_zero and metric in ("batch_bytes", "batch_fill") and group["aux_batches"].eq(0).all():
                 record[metric] = np.nan
             else:
                 record[metric] = np.nan

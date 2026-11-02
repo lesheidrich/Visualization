@@ -520,3 +520,52 @@ def test_csvs_are_sorted_and_plots_do_not_change(config, module, stem, tmp_path)
     write_ledger(config, ordered)
     second = quiet(module.run, config)
     assert {p.name: p.read_bytes() for p in second if p.suffix == ".png"} == first
+
+
+def test_gc_csvs_are_sorted_as_the_last_step(config):
+    rows = [gc_observation(strategy=s, rerun=r, threads=t, score=100 + i) for i, (s, t, r) in enumerate(
+        [("1a", 2, "10"), ("base", 1, "2"), ("1a", 1, "2"), ("1a", 2, "2"), ("base", 1, "10"), ("1a", 1, "10")])]
+    write_ledger(config, rows)
+    paths = quiet(gc_metrics.run, config)
+    tables = {p.name: pd.read_csv(p, dtype=str) for p in paths if p.suffix == ".csv"}
+    for name, expected in ((f"gc_{BENCH}_avg.csv", ["base", "1a", "1a"]),
+                           (f"gc_{BENCH}_pauses_max_median.csv", ["base", "1a", "1a"]),
+                           (f"gc_{BENCH}_r_all.csv", ["base", "base", "1a", "1a", "1a", "1a"])):
+        assert tables[name].strategy.tolist() == expected, name
+    assert tables[f"gc_{BENCH}_r_all.csv"].rerun.tolist() == ["2", "10", "2", "10", "2", "10"]
+
+
+def test_sorted_for_csv_keeps_rows_on_a_duplicate_index_and_sorts_threads_as_numbers(config):
+    from src.utils import sorted_for_csv
+    frame = pd.DataFrame(
+        {"strategy": ["base", "base", "base"], "threads_blobshuffle": ["10", "2", "4"]}, index=[5, 5, 7])
+    assert sorted_for_csv(frame, config).threads_blobshuffle.tolist() == ["2", "4", "10"]
+
+
+@pytest.mark.parametrize("tag,expected", [
+    ("raw3_2a_n04_r3", "raw3_2a_n04_r3"),   # prefix kept
+    ("2a_n01_r1", "2a_n04_r3"),             # disagrees with the row
+    ("sweep", "2a_n04_r3"),                 # says nothing
+    ("", "2a_n04_r3")])
+def test_row_tag_never_misstates_the_row(tag, expected):
+    from src.utils import row_tag
+    assert row_tag({"strategy": "2a", "threads_blobshuffle": 4, "rerun": "3", "run_tag": tag}) == expected
+
+
+def test_one_blank_among_mb1_zeros_warns_only_about_the_blank(config):
+    rows = [gc_observation(strategy="base", rerun=r, threads=t, aux_batches=b)
+            for r, t, b in (("1", 1, "0"), ("2", 1, "0"), ("1", 2, "0"), ("2", 2, ""))]
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        gc_metrics.prepare(pd.DataFrame(rows), config)
+    text = [str(w.message) for w in seen if "batch" in str(w.message).lower()]
+    assert any("Blank aux_batches at ledger row(s) [5]" in m for m in text)
+    assert not any("Zero aux_batches" in m or "is 0 on every row" in m for m in text)
+    assert not any("threads=1" in m for m in text)
+
+
+def test_blank_other_metric_on_a_no_batch_benchmark_still_warns(config):
+    rows = [gc_observation(strategy="base", rerun="1", aux_batches="0", pauses_max=""),
+            gc_observation(strategy="base", rerun="2", aux_batches="0")]
+    with pytest.warns(UserWarning, match="Mean of reruns of pauses_max missing"):
+        gc_metrics.prepare(pd.DataFrame(rows), config)

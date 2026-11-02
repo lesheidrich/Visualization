@@ -241,8 +241,9 @@ blank `forks`, `measurement_iterations`, `measurement_time` or
 written. A blank `gc_alloc_rate_norm`, `gc_count`, `gc_time`, `pauses_max`,
 `pauses_p99`, `aux_recordBytes` or `aux_batches` stays empty with a warning
 naming the rows (a blank `gc_time` leaves `gc_time_pct` empty; a blank aux value
-leaves `batch_bytes` and `batch_fill` empty). Zero `aux_batches` leaves
-`batch_bytes` and `batch_fill` empty with a warning. `gc_time_pct` above 100 %
+leaves `batch_bytes` and `batch_fill` empty). Zero `aux_batches` leaves `batch_bytes` and `batch_fill` empty. A benchmark named
+`NoFinalize` that is zero on every row gives no warning, since it closes no batch by design.
+Any other benchmark warns once if every row is zero, or names the rows if only some are. `gc_time_pct` above 100 %
 warns.
 
 The mean of reruns is the unweighted arithmetic mean over all reruns of a benchmark,

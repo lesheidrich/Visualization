@@ -35,9 +35,10 @@ def run_tag(strategy, threads, rerun):
 
 
 def row_tag(row):
-    """A row's own run_tag, or the same form built from its fields."""
+    """A row's own run_tag if it agrees with the row, or the same form built from its fields."""
+    built = run_tag(row["strategy"], row["threads_blobshuffle"], row["rerun"])
     tag = str(row.get("run_tag", "")).strip()
-    return tag if tag not in ("", "nan") else run_tag(row["strategy"], row["threads_blobshuffle"], row["rerun"])
+    return tag if tag.endswith(built) else built
 
 
 def warn_incomplete(benchmark, strategy, threads, group, all_reruns):
@@ -54,7 +55,8 @@ def sorted_for_csv(table, config):
     if "rerun" in table:
         numbers = pd.to_numeric(table["rerun"], errors="coerce")
         keys["rerun"] = numbers if numbers.notna().all() else table["rerun"].astype(str)
-    return table.loc[keys.sort_values(list(keys.columns), kind="stable").index]
+    positions = keys.reset_index(drop=True).sort_values(list(keys.columns), kind="stable").index
+    return table.iloc[positions]
 
 
 def strategy_key(value):
