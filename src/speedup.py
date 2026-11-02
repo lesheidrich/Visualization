@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
-                    AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
+                    AVERAGE_PART, FIELLER_METHOD, fieller_interval, file_names, load_ledger, normalize_throughput, output_directory,
                     output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, run_tag, t_interval, warn, warn_incomplete)
 
 
@@ -68,7 +68,7 @@ def prepare(frame, config):
         if not np.isfinite(speedup):
             raise ValueError(f"Nonfinite speedup at ledger row(s) {group['source_row'].astype(int).tolist()}")
         ci = {name: np.nan for name in ("ci_low", "ci_high", "t_low", "t_high",
-                                        "ci_method", "ci_resamples", "ci_seed")}
+                                        "fieller_low", "fieller_high", "ci_method", "ci_resamples", "ci_seed")}
         ci["ci_seed"] = pd.NA  # Seeds exceed 2**53, so a float column would round them.
         ratios = group["speedup"].to_numpy()
         ordered = group.sort_values("rerun", kind="stable")  # CI only: independent of ledger row order
@@ -77,6 +77,12 @@ def prepare(frame, config):
             ci["ci_low"], ci["ci_high"] = bootstrap_ci(
                 ordered["score"].to_numpy(), ordered["baseline_score"].to_numpy(), seed=seed)
             ci["t_low"], ci["t_high"] = t_interval(ratios)
+            bounds = fieller_interval(ordered["score"].to_numpy(), ordered["baseline_score"].to_numpy())
+            if bounds is None:
+                warn(f"No Fieller interval for {benchmark}/{strategy}/threads={threads}: "
+                     "the base mean cannot be told apart from zero or the interval is unbounded")
+            else:
+                ci["fieller_low"], ci["fieller_high"] = bounds
             ci.update(ci_method=CI_METHOD, ci_resamples=BOOTSTRAP_RESAMPLES, ci_seed=seed)
         elif not (strategy == "base" and threads == 1):
             warn(f"No CI for {benchmark}/{strategy}/threads={threads}: fewer than two reruns or no spread")
@@ -100,7 +106,7 @@ def prepare(frame, config):
 
 
 def render(table, config, title, *, strategies=None, threads=None):
-    """Render prepared dimensionless ratios; across-reruns lines carry the resampled CI."""
+    """Render prepared dimensionless ratios; across-reruns lines carry the paired Fieller interval."""
     import matplotlib
 
     if not config.show:
@@ -120,19 +126,20 @@ def render(table, config, title, *, strategies=None, threads=None):
                 color=config.colors.get(strategy, palette(i % 10)),
                 label=config.labels.get(strategy, strategy), zorder=3)
         if aggregate:
-            ok = data["ci_low"].notna() & data["ci_high"].notna()
+            ok = data["fieller_low"].notna() & data["fieller_high"].notna()
             if ok.any():
                 valid = data[ok]
-                ax.errorbar(valid.index, valid["speedup"],
-                            yerr=np.vstack([valid["speedup"] - valid["ci_low"],
-                                            valid["ci_high"] - valid["speedup"]]),
+                # Never negative, whatever rounding does to a bound that sits on the point.
+                lower = np.maximum(valid["speedup"] - valid["fieller_low"], 0)
+                upper = np.maximum(valid["fieller_high"] - valid["speedup"], 0)
+                ax.errorbar(valid.index, valid["speedup"], yerr=np.vstack([lower, upper]),
                             fmt="none", ecolor="#222", elinewidth=1.2, capsize=3,
                             capthick=1.2, zorder=6)
     ax.set_xticks(threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel("Speedup vs. Base N=1 (dimensionless)")
-    drawn = aggregate and (table["ci_low"].notna() & table["ci_high"].notna()).any()
-    ax.set_title(f"{title}\nError bars: {CI_METHOD}" if drawn else title)
+    drawn = aggregate and (table["fieller_low"].notna() & table["fieller_high"].notna()).any()
+    ax.set_title(f"{title}\nError bars: {FIELLER_METHOD}" if drawn else title)
     ax.set_ylim(bottom=0)
     ax.margins(y=0.15)
     ax.grid(axis="y", color="#ddd", zorder=0)

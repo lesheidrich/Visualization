@@ -18,6 +18,8 @@ import pandas as pd
 BOOTSTRAP_RESAMPLES = 10000
 CI_BASE_SEED = 42
 CI_METHOD = "95% percentile bootstrap of reruns"
+T_METHOD = "95% t interval of reruns"
+FIELLER_METHOD = "95% paired Fieller interval of reruns"
 AVERAGE_PART = "avg"
 ALL_RERUNS_PART = "r_all"
 
@@ -402,6 +404,33 @@ def t_interval(values, level=0.95):
     mean = values.mean()
     half = t_quantile(1 - (1 - level) / 2, n - 1) * values.std(ddof=1) / math.sqrt(n)
     return mean - half, mean + half
+
+
+def fieller_interval(strategy_scores, base_scores, level=0.95):
+    """Paired Fieller interval for mean(strategy) / mean(base) over reruns.
+
+    Solves (ms - theta*mb)^2 = t^2 * (vss - 2*theta*vsb + theta^2*vbb) / n for theta, with sample
+    (ddof=1) variances and covariance of the paired scores and t on n-1 degrees of freedom.
+    Returns (low, high), or None when the base mean cannot be told apart from zero at this level
+    (the theta^2 coefficient is not positive) or the discriminant is negative.
+    """
+    s = np.asarray(strategy_scores, dtype=float)
+    b = np.asarray(base_scores, dtype=float)
+    n = len(s)
+    ms, mb = s.mean(), b.mean()
+    vss, vbb = s.var(ddof=1), b.var(ddof=1)
+    vsb = float(np.sum((s - ms) * (b - mb)) / (n - 1))
+    k = t_quantile(1 - (1 - level) / 2, n - 1) ** 2 / n
+    a = mb * mb - k * vbb
+    if not a > 0:
+        return None
+    half_b = ms * mb - k * vsb  # half of the linear coefficient, sign flipped
+    c = ms * ms - k * vss
+    disc = half_b * half_b - a * c
+    if not disc >= 0:
+        return None
+    root = math.sqrt(disc)
+    return (half_b - root) / a, (half_b + root) / a
 
 
 def cell_seed(*parts):

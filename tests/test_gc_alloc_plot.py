@@ -21,13 +21,14 @@ import yaml
 from conftest import gc_observation
 from src import cli, gc_metrics
 from src.gc_metrics import ALLOC_CI, _compact_slots, prepare
-from src.utils import CI_METHOD, cell_seed
+from src.utils import T_METHOD, cell_seed
 
 BENCH = "mb1_rawNoFinalize"
 BENCH2 = "mb2_rawFinalize"
 ROOT = Path(__file__).parents[1]
 SAMPLE = ROOT / "docs" / "jmh_sample.csv"
 CI_LOW, CI_HIGH = ALLOC_CI
+T_LOW, T_HIGH = gc_metrics.ALLOC_T
 
 
 @pytest.fixture(autouse=True)
@@ -142,7 +143,8 @@ def test_integration_average_gains_exactly_the_two_columns_and_nothing_else_chan
     assert averages.columns.tolist() == [
         "benchmark_short", "strategy", "threads_blobshuffle", *gc_metrics.AVERAGED,
         "n_reruns", "total_reruns", "contributing_reruns", "source_rows", "source_files",
-        "original_strategies", "summary_kind", "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high"]
+        "original_strategies", "summary_kind", "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high",
+        *[f"{m}_t_{e}" for m in gc_metrics.AVERAGED for e in ("low", "high")]]
     base = averages[averages["strategy"].eq("base")].iloc[0]
     # Literal values of the unchanged columns (defaults: gc_count 10, gc_time 2500, pauses 5/2, fill 1).
     assert (base["gc_alloc_rate_norm"], base["gc_count"], base["gc_time"], base["gc_time_pct"],
@@ -223,7 +225,7 @@ def test_feature_bars_error_bars_axes_order_and_colours(tmp_path, monkeypatch):
     assert ax.get_xlabel() == "BlobShuffle threads"
     assert [t.get_text() for t in ax.get_xticklabels()] == ["1", "2"]
     assert ax.get_title().split("\n") == [f"{BENCH} — gc_alloc_rate_norm, mean of reruns",
-                                          f"Error bars: {CI_METHOD}"]
+                                          f"Error bars: {T_METHOD}"]
     assert not ax.texts and len(fig.texts) == 0                        # no explanatory notes
     # Legend: configured order and labels (Base, S1_A, S2_A).
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["Base", "S1_A", "S2_A"]
@@ -243,15 +245,15 @@ def test_feature_bars_error_bars_axes_order_and_colours(tmp_path, monkeypatch):
         by_key[(strategy, threads)] = mean
     assert by_key == pytest.approx({("base", 1): 1200, ("1a", 1): 500, ("1a", 2): 1000, ("2a", 2): 60})
     assert all(h > 0 for _, h, _ in bars)                              # bars are visible
-    # Error bars: equal the CSV CI where drawn; none for the no-spread group (1a at 1 thread).
+    # Error bars: equal the CSV t interval where drawn; none for the no-spread group (1a at 1 thread).
     segments = {round(seg[0][0], 9): (seg[0][1], seg[1][1]) for seg in error_segments(fig)}
     assert len(segments) == 3
     for (strategy, threads), (x, _) in expected.items():
         row = csv[csv["strategy"].eq(strategy) & csv["threads_blobshuffle"].eq(threads)].iloc[0]
-        if pd.isna(row[CI_LOW]):
+        if pd.isna(row[T_LOW]):
             assert round(x, 9) not in segments
         else:
-            assert segments[round(x, 9)] == pytest.approx((row[CI_LOW], row[CI_HIGH]))
+            assert segments[round(x, 9)] == pytest.approx((row[T_LOW], row[T_HIGH]))
     errorbars = [c for c in ax.containers if c.__class__.__name__ == "ErrorbarContainer"]
     assert errorbars and all(c.lines[2][0].get_linewidth()[0] <= 2 for c in errorbars)   # thin
     assert all(len(c.lines[1]) == 2 for c in errorbars)                                  # with caps
@@ -311,7 +313,8 @@ def compare_with_old(config_path, monkeypatch, tmp_path):
         if old.name.endswith("_avg.csv"):
             new_frame, old_frame = pd.read_csv(new), pd.read_csv(old)
             assert old_frame[[CI_LOW, CI_HIGH]].isna().all().all()    # the old run has no CI values
-            assert new_frame.columns.tolist()[-2:] == [CI_LOW, CI_HIGH]
+            t_columns = [f"{m}_t_{e}" for m in gc_metrics.AVERAGED for e in ("low", "high")]
+            assert new_frame.columns.tolist()[-len(t_columns) - 2:] == [CI_LOW, CI_HIGH, *t_columns]
             pd.testing.assert_frame_equal(new_frame.drop(columns=[CI_LOW, CI_HIGH]),
                                           old_frame.drop(columns=[CI_LOW, CI_HIGH]))
         else:

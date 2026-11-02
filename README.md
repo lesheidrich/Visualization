@@ -109,15 +109,17 @@ median option, or weighting by fork count. Missing strategy/thread combinations
 stay missing; incomplete coverage produces a warning and contributor counts.
 
 Per-rerun error bars use `score_confidence_low` and `score_confidence_high` from
-the ledger, JMH's 99.9% interval; a row without them gets `interval_kind` `none`. The across-reruns bar is the **mean of reruns**. Its error bars are a
-95% percentile bootstrap of the rerun scores: 10,000 resamples of whole reruns,
+the ledger, JMH's 99.9% interval; a row without them gets `interval_kind` `none`. The across-reruns bar is the **mean of reruns**. Its error bars are the
+95% t interval of the rerun scores (`t_low`, `t_high`): mean -/+ t * s / sqrt(n), s the sample
+SD and t with n - 1 degrees of freedom; for scores 100, 110, ..., 190 that is [123.34, 166.66].
+The title says `95% t interval of reruns` and `interval_kind` says the same. The plot draws only
+the t columns. A lower bound below zero stays true in the CSV; the plot's axis still starts at 0.
+The CSV also keeps a 95% resampled CI (percentile bootstrap) of the same scores, for tests and
+sanity checks: 10,000 resamples of whole reruns,
 with a fixed seed (42, combined with benchmark, strategy and threads) and the scores
 taken sorted by rerun name, so repeat runs and a reordered ledger give identical values. Ledger bounds do not contribute. For scores 100 and
-200 the resampled means are 100, 150 or 200, so the CI is [100, 200]. The CSV
-also holds a 95% t interval on the same scores; the plot draws only the bootstrap
-CI. With ten reruns the real coverage of the percentile bootstrap is about 90% on
-normal data (our own calculation), not 95%, so the t interval is reported beside
-it. The reruns share one instance, so the CI describes variation on this machine
+200 the resampled means are 100, 150 or 200, so the resampled CI is [100, 200]. With ten reruns the real coverage of the percentile bootstrap is about 90% on
+normal data (our own calculation), not 95%, which is why the plot draws the t interval. The reruns share one instance, so the CI describes variation on this machine
 in this period. A group with fewer than two reruns, or with no spread, gets no CI
 and a warning (`No CI for <bench>/<strategy>/threads=<N>: ...`). If a ledger score
 has no bounds, only its per-rerun bar loses error bars. Plots carry no n labels.
@@ -129,8 +131,8 @@ bounds, `score_unit`, `interval_kind`, `n_reruns`, `total_reruns`, and JSON-enco
 `contributing_reruns`. Per-rerun CSVs retain input metadata, original score/unit
 values and source file/row. Aggregate CSVs include source files, source rows and
 original strategy identifiers so contributions can be traced to per-rerun CSVs.
-Across-reruns CSVs hold `ci_low`, `ci_high`, `t_low`, `t_high`, `ci_method`,
-`ci_resamples` and `ci_seed` instead of ledger bounds.
+Across-reruns CSVs hold `ci_low`, `ci_high` (resampled CI, for checks), `t_low`, `t_high` (drawn),
+`ci_method`, `ci_resamples` and `ci_seed` instead of ledger bounds.
 Do not interpret absent observations as zero or overlapping error bars as
 significance tests. Plot and export values come from the same prepared result tables.
 
@@ -185,17 +187,24 @@ ops/s), `n_reruns`, `total_reruns`, JSON-encoded
 `contributing_reruns`, numerator/baseline source-row lists, source files, and
 `summary_kind`. Plots and exports use the same prepared tables.
 
-Across-reruns speedup lines have the same 95% percentile bootstrap CI (10,000
-resamples, fixed seed). Each resample picks whole contributing reruns, so every
-strategy score stays with its base score from the same rerun, and the ratio of
-means is taken. For base scores [100, 200] and strategy scores [200, 300], the
-resampled ratios are only 2, 500/300 or 1.5, so the CI is [1.5, 2]. The CSV adds
-`ci_low`, `ci_high`, `t_low`, `t_high`, `ci_method`, `ci_resamples`, `ci_seed`
-and `t_basis`; the t interval uses the per-rerun ratios, a check on a slightly
-different estimator. Real coverage is about 90% on normal data at ten reruns
-(our own calculation), so the t interval is reported beside the bootstrap CI.
+Across-reruns speedup lines keep the ratio of means as the point and draw the
+95% paired Fieller interval of reruns (`fieller_low`, `fieller_high`; title `95% paired Fieller
+interval of reruns`). It is every ratio theta for which a t interval on (strategy score - theta *
+base score) over the reruns contains zero: (ms - theta mb)^2 = t^2 (vss - 2 theta vsb + theta^2 vbb) / n,
+with the means, sample (n - 1) variances and covariance of the paired scores and t with n - 1
+degrees of freedom. Each strategy score stays with its base score from the same rerun. If the
+base mean cannot be told apart from zero at this level (or the equation has no solution), both
+columns are blank, no bar is drawn, and a warning names the group. For strategy scores 200, 210,
+190, 205, 195, 202, 198, 208, 192, 200 and base scores 100, 104, 96, 103, 98, 101, 99, 103, 97, 99
+the speedup is 2.0 and the interval is about [1.98867, 2.01105]. The CSV also keeps, for checks and
+not drawn, a 95% resampled CI (percentile bootstrap, 10,000 resamples of whole reruns, fixed seed:
+for base scores [100, 200] and strategy scores [200, 300] the resampled ratios are only 2, 500/300
+or 1.5, so it is [1.5, 2]) and a 95% t interval on the per-rerun ratios, in `ci_low`, `ci_high`,
+`t_low`, `t_high`, `ci_method`, `ci_resamples`, `ci_seed` and `t_basis`. Real coverage of the
+percentile bootstrap is about 90% on normal data at ten reruns (our own calculation).
 Groups with fewer than two reruns or no spread have no CI and a warning; base at
-one thread is always ratio 1, with no CI and no warning. Ledger bounds never
+one thread is always ratio 1, with no CI and no warning. A lower bound below zero stays true in
+the CSV while the axis starts at 0. Ledger bounds never
 contribute. Per-rerun speedup charts and CSVs stay values only.
 
 This remains a descriptive visualization, without significance tests or
@@ -251,12 +260,13 @@ strategy and thread count (`gc_<benchmark>_avg.csv`), with `n_reruns`, `total_re
 reruns (incomplete coverage warns, as in `thrpt`). If any contributor lacks a
 metric, that metric's mean is empty and a warning is printed. Note that the
 mean `pauses_max` is the **mean of the per-rerun maxima**, not a maximum;
-use the per-rerun CSV for the worst case. Only `gc_alloc_rate_norm` has a resampled CI,
-in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high` (last two columns of the
-`_avg` CSV): the 95% percentile bootstrap of the rerun values, 10,000 resamples, seeded per
-benchmark, strategy and thread count as for throughput. A group with fewer than two reruns,
-no spread, or a blank rerun value has blank CI values and a warning naming the group.
-No other metric has a CI.
+use the per-rerun CSV for the worst case. Every averaged metric has a 95% t interval of the
+rerun values in `<metric>_t_low` and `<metric>_t_high` (the last columns of the `_avg` CSV);
+a group with fewer than two reruns, no spread, or a blank contributor has them blank, with no
+extra warning. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
+checks), in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high`: 10,000 resamples, seeded per
+benchmark, strategy and thread count as for throughput; there a blank value comes with a warning
+naming the group. The pivots hold the means only.
 
 ### pauses_max dot plot
 
@@ -280,8 +290,10 @@ no CSV row. The median is of the per-rerun maxima, not a maximum.
 Per benchmark, `gc` also writes `gc_<benchmark>_gc_alloc_rate_norm.<fmt>` (one file per
 format in `output.formats`). Bars are the mean of reruns in B/op, raw, on a linear
 y-axis from zero (no log scale). X-axis is BlobShuffle threads; strategy order, labels
-and colours are the configured ones. Error bars are the resampled CI from the `_avg`
-CSV and are drawn only where it is not blank; the title says so on a second line. A
+and colours are the configured ones. Error bars are the 95% t interval from the `_avg`
+CSV (`gc_alloc_rate_norm_t_low`, `gc_alloc_rate_norm_t_high`) and are drawn only where it is not
+blank; the title says `95% t interval of reruns` on a second line. A lower bound below zero stays
+true in the CSV and the axis still starts at 0. A
 strategy with no mean at a thread count has no bar there, and the strategies present
 are centred in that group, as on the pauses_max plot. There are no per-rerun allocation plots.
 
@@ -301,7 +313,8 @@ is the smallest margin for which the row would count as equivalent. The 95% boot
 ratios (`sd_log_ratio_pct`, in percent) and `reruns_2a_gt_2b` are for reference and never decide.
 
 The verdict is the first match of: `no spread observed` (the per-rerun ratios are identical apart
-from rounding, so intervals and margin are empty); `equivalent` (equivalence interval inside
+from rounding, so intervals and the smallest provable margin are empty, while `margin` still holds
+the configured setting: a blank `margin` means none was configured); `equivalent` (equivalence interval inside
 1/(1+m) to 1+m); `2A faster` (difference interval above 1); `2B faster` (below 1);
 `inconclusive`. The margin m is `comparison.margin` in `config.yaml` (a fraction, 0.05 shipped,
 reasoning in the comment there). Without it, `equivalent` is never issued and a warning says so.

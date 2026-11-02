@@ -6,15 +6,15 @@ Decisions made since the report:
 
 | Topic | Decision |
 |---|---|
-| Speedup across reruns | Ratio of means, resampling whole reruns |
-| CI method for across-reruns plots | **Plain percentile bootstrap (2.5% / 97.5%), with a t interval reported beside it.** The expanded percentile recommended below was not adopted: see the fact-check. |
+| Speedup across reruns | Ratio of means. Plots draw the 95% paired Fieller interval (`fieller_low`, `fieller_high`); the table keeps the whole-rerun resampling for checks. |
+| CI method for across-reruns plots | **95% t interval of reruns (owner decision 2026-11-02, `plot-t-intervals`).** Plots draw `t_low`/`t_high` (throughput), `gc_alloc_rate_norm_t_low`/`_t_high` (GC) and `fieller_low`/`fieller_high` (speedup). The plain percentile bootstrap (2.5% / 97.5%) stays in the tables (`ci_low`, `ci_high`, `gc_alloc_rate_norm_ci_low`/`_ci_high`) for checks and is not drawn. The expanded percentile recommended below was not adopted: see the fact-check. |
 | Resamples | 10,000, Hesterberg's routine value |
 | Single-rerun throughput plots | Error bars are that rerun's ledger bounds, with no resampling. Ledger bounds are never resampled or averaged. |
-| Mean-of-reruns throughput plots | Bars are the mean of the rerun scores. The CI comes from resampling only those scores. |
+| Mean-of-reruns throughput plots | Bars are the mean of the rerun scores. Error bars are the t interval of those scores; the resampled CI of the same scores is in the CSV for checks. |
 | Speedup single-rerun plots | No error bars |
 | Groups with no spread or fewer than two reruns | No CI, with a warning. Their label says `none`, and a title names error bars only if some are drawn. |
-| `gc_alloc_rate_norm` plot (built, `add-gc-alloc-plot`) | Bars of the mean of reruns, linear axis from zero, no log axis. CI is the same plain percentile bootstrap, 10,000 resamples, in two columns of the GC `_avg` CSV. Rerun values are taken in rerun order, so ledger row order cannot change the CI. |
-| Other GC metrics | No CI. `pauses_max` stays dots plus a median line, and `pauses_p99` stays in the table, not plotted. |
+| `gc_alloc_rate_norm` plot (built, `add-gc-alloc-plot`) | Bars of the mean of reruns, linear axis from zero, no log axis. Error bars are the 95% t interval (`gc_alloc_rate_norm_t_low`, `_t_high`). The plain percentile bootstrap, 10,000 resamples, stays in two other columns of the GC `_avg` CSV, for checks. Rerun values are taken in rerun order, so ledger row order cannot change the CI. |
+| Other GC metrics | Every averaged metric has `<metric>_t_low` and `<metric>_t_high` in the `_avg` CSV (blank without spread or with a blank contributor). No plot draws them. `pauses_max` stays dots plus a median line, and `pauses_p99` stays in the table, not plotted. |
 | 2A vs 2B (built, `add-2a-2b-comparison`) | Paired log-t on per-rerun log(2A/2B), decided by the owner over Fieller. mb1 and mb2 are analysed separately. One verdict per thread count, at 99% and 98%. Cohen's d is dropped: see [notes_for_thesis.md](notes_for_thesis.md). The margin is 5%, set in `config.yaml`. |
 
 **Where this table and the report below differ, this table wins.** The report is kept as written, so it still recommends the expanded percentile, 50,000 resamples and rerun dots, and its thesis wording mentions the expanded percentile. None of those were adopted.

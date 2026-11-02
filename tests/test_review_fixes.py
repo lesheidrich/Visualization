@@ -19,7 +19,7 @@ from conftest import gc_observation, observation
 from src import cli, compare, gc_metrics, speedup, thrpt
 from src.compare import prepare as compare_prepare
 from src.config import Config
-from src.utils import CI_METHOD, cell_seed, load_ledger
+from src.utils import FIELLER_METHOD, T_METHOD, cell_seed, load_ledger
 
 BENCH = "mb1_rawNoFinalize"
 RERUNS = [f"{i:02d}" for i in range(1, 11)]
@@ -143,7 +143,7 @@ def test_thrpt_titles_through_run_name_only_drawn_error_bars(config, monkeypatch
     assert titles[stem + "r01"] == f"{BENCH} — throughput, rerun 01"                      # every bound blank
     assert titles[stem + "r02"] == f"{BENCH} — throughput, rerun 02\nError bars: 99.9% ledger confidence bounds"
     assert titles[stem + "r03"] == f"{BENCH} — throughput, rerun 03\nError bars: 99.9% ledger confidence bounds"
-    assert titles[stem + "avg"] == f"{BENCH} — throughput, mean of reruns\nError bars: {CI_METHOD}"
+    assert titles[stem + "avg"] == f"{BENCH} — throughput, mean of reruns\nError bars: {T_METHOD}"
     assert finite_segments(titles[stem + "r01:figure"].axes[0]) == []
     assert len(finite_segments(titles[stem + "r02:figure"].axes[0])) == 1       # only base is drawn
 
@@ -163,7 +163,7 @@ def test_speedup_titles_through_run(config, monkeypatch):
     quiet(speedup.run, config)
     stem = f"speedup_{BENCH}_"
     assert titles[stem + "r01"] == f"{BENCH} — speedup, rerun 01"
-    assert titles[stem + "avg"] == f"{BENCH} — speedup, mean of reruns\nError bars: {CI_METHOD}"
+    assert titles[stem + "avg"] == f"{BENCH} — speedup, mean of reruns\nError bars: {FIELLER_METHOD}"
 
 
 def test_thrpt_one_rerun_writes_files_and_draws_no_error_bar_on_the_aggregate(config, monkeypatch):

@@ -6,7 +6,7 @@ import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
-                    AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
+                    AVERAGE_PART, T_METHOD, file_names, load_ledger, normalize_throughput, output_directory,
                     output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, t_interval, warn, warn_incomplete)
 
 
@@ -15,7 +15,7 @@ LEDGER_LEVEL = "99.9%"  # JMH's confidence level, per the ledger's legend.
 
 
 def prepare(frame, config):
-    """Return normalized observations and mean of reruns with a resampled CI."""
+    """Return normalized observations and mean of reruns with a t interval and a bootstrap CI for checks."""
     observations = normalize_throughput(frame, config.benchmarks, config.labels)
     has_bounds = observations["score_confidence_low"].notna() & observations["score_confidence_high"].notna()
     observations["interval_kind"] = np.where(has_bounds, LEDGER_BOUNDS, "none")
@@ -47,7 +47,7 @@ def prepare(frame, config):
             "benchmark_short": benchmark, "strategy": strategy, "threads_blobshuffle": threads,
             "score": group["score"].mean(), "score_unit": "ops/s",
             **ci,
-            "interval_kind": CI_METHOD if ci["ci_method"] == CI_METHOD else "none", "n_reruns": count, "total_reruns": total,
+            "interval_kind": T_METHOD if ci["ci_method"] == CI_METHOD else "none", "n_reruns": count, "total_reruns": total,
             "contributing_reruns": json.dumps(group["rerun"].tolist()),
             "source_rows": json.dumps(group["source_row"].astype(int).tolist()),
             "source_files": json.dumps(group["source_file"].unique().tolist()) if "source_file" in group else "[]",
@@ -79,8 +79,8 @@ def render(table, config, title, *, strategies=None, threads=None):
         color = config.colors.get(strategy, palette(i % 10))
         ax.bar(x, data["score"], width=width, color=color, edgecolor="white",
                label=config.labels.get(strategy, strategy), zorder=2)
-        aggregate = "ci_low" in data
-        low_col, high_col = ("ci_low", "ci_high") if aggregate else ("score_confidence_low", "score_confidence_high")
+        aggregate = "t_low" in data
+        low_col, high_col = ("t_low", "t_high") if aggregate else ("score_confidence_low", "score_confidence_high")
         complete = data[low_col].notna() & data[high_col].notna()
         if complete.any():
             valid = data.loc[complete]

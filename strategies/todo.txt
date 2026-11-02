@@ -55,4 +55,6 @@ Outside the list, also needed.
     Seen there: aux_recordBytes / score is 1016 bytes on every thrpt row, and the file's legend says
     score is records per ms and pauses_* and gc_time are in ms.
     Still to check on the final ledger: no reruns or jobs are missing, and order_unbalanced.
+    Also check on the final ledger, for the t intervals: skew of the 10 rerun scores, and whether scores
+    drift in time order. Investigate any odd rerun, because no interval method survives one.
 

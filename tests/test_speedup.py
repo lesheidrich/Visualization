@@ -150,7 +150,8 @@ def test_speedup_ignores_optional_bounds_without_warnings(config):
     with warnings.catch_warnings(record=True) as seen:
         _, summary = prepare(frame, config)
     assert summary[summary.strategy.eq("1a")].speedup.iloc[0] == 1.6666666666666667  # 250 / 150
-    assert not seen
+    # Only the Fieller warning (two reruns, base 100 and 200); nothing about the ledger bounds.
+    assert len(seen) == 1 and str(seen[0].message).startswith("No Fieller interval for ")
 
 
 def test_line_coordinates_gaps_references_and_labels(config):

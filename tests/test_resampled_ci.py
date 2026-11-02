@@ -21,7 +21,10 @@ from src import speedup, thrpt
 from src.utils import (bootstrap_ci, cell_seed, has_spread, t_interval, t_quantile)
 
 METHOD = "95% percentile bootstrap of reruns"
+T_METHOD = "95% t interval of reruns"
 CI_COLUMNS = ["ci_low", "ci_high", "t_low", "t_high", "ci_method", "ci_resamples", "ci_seed"]
+SPEEDUP_COLUMNS = ["ci_low", "ci_high", "t_low", "t_high", "fieller_low", "fieller_high",
+                   "ci_method", "ci_resamples", "ci_seed"]
 BENCH = "mb1_rawNoFinalize"
 # cell_seed(BENCH, "base", 1, "score") and cell_seed(BENCH, "1a", 2, "speedup"),
 # from hashlib in the independent script (see test_cell_seed_literal for the recipe).
@@ -188,7 +191,7 @@ def test_throughput_across_reruns_literal_ci_and_columns(config):
     assert row.ci_resamples == 10000
     # Seeds exceed 2**53, and a pandas row (or a NaN-bearing column) is float64, so compare relatively.
     assert row.ci_seed == pytest.approx(SEED_BASE_1_SCORE, rel=1e-15)
-    assert row.interval_kind == METHOD
+    assert row.interval_kind == T_METHOD
     assert row.score == 150
     columns = result.columns.tolist()
     start = columns.index("ci_low")
@@ -296,19 +299,19 @@ def test_throughput_render_bars_match_ci_and_skip_nan(config):
         ax = fig.axes[0]
         found = segments(ax)
         assert len(found) == 1  # "1a" has no spread, so no bar, in particular no zero-width bar
-        np.testing.assert_allclose(found[0][:, 1], [100.0, 200.0])  # ci_low, ci_high
-        assert ax.get_title().endswith(f"Error bars: {METHOD}")
+        np.testing.assert_allclose(found[0][:, 1], [-485.31023680874375, 785.3102368087438])  # t_low, t_high
+        assert ax.get_title().endswith(f"Error bars: {T_METHOD}")
         assert not ax.texts  # No n labels on the plot.
     finally:
         plt.close(fig)
 
 
-def test_throughput_render_ten_reruns_uses_ci_not_t_interval(config):
+def test_throughput_render_ten_reruns_uses_t_interval_not_bootstrap(config):
     _, result = thrpt.prepare(pd.DataFrame(two_reruns(scores=list(range(100, 200, 10)))), config)
     fig = thrpt.render(result, config, "Average", strategies=["base"], threads=[1])
     try:
         found = segments(fig.axes[0])
-        np.testing.assert_allclose(found[0][:, 1], [127.0, 163.0])
+        np.testing.assert_allclose(found[0][:, 1], [123.34149410331793, 166.65850589668207])
     finally:
         plt.close(fig)
 
@@ -347,7 +350,7 @@ def test_speedup_across_reruns_literal_ci_t_interval_and_columns(config):
     assert row.speedup == pytest.approx(250 / 150)
     columns = summary.columns.tolist()
     start = columns.index("ci_low")
-    assert columns[start:start + 7] == CI_COLUMNS
+    assert columns[start:start + 9] == SPEEDUP_COLUMNS
     assert start > columns.index("speedup")
 
 
@@ -399,8 +402,9 @@ def test_speedup_malformed_ledger_bounds_change_nothing(config):
     broken["score_confidence_high"] = "not-an-interval"
     broken["score_error"] = "unused"
     (_, summary), messages = collect(speedup.prepare, broken, config)
-    pd.testing.assert_frame_equal(summary[CI_COLUMNS + ["speedup"]], clean[CI_COLUMNS + ["speedup"]])
-    assert not messages
+    pd.testing.assert_frame_equal(summary[SPEEDUP_COLUMNS + ["speedup"]], clean[SPEEDUP_COLUMNS + ["speedup"]])
+    # Two reruns: the base mean is not told apart from zero, so only the Fieller warning appears.
+    assert len(messages) == 1 and messages[0].startswith("No Fieller interval for ")
 
 
 def test_speedup_per_rerun_table_unchanged(config):
@@ -437,19 +441,28 @@ def speedup_inputs(config):
 
 
 def test_speedup_render_error_bars_on_across_reruns_chart(config):
-    config, _, summary = speedup_inputs(config)
+    # Ten reruns, so Fieller is bounded. 1a at 2 threads has ratios 2 and about 1.5; 2a has ratio 2 throughout.
+    rows = []
+    for i in range(10):
+        base = 100 + 10 * i
+        rows += [observation(rerun=f"r{i:02d}", score=base),
+                 observation("1a", f"r{i:02d}", 2, 2 * base - (30 if i % 2 else 0)),
+                 observation("2a", f"r{i:02d}", 2, 2 * base)]
+    config = replace(config, colors={"1a": "red", "2a": "blue"})
+    _, summary = speedup.prepare(pd.DataFrame(rows), config)
     fig = speedup.render(summary, config, "Average", strategies=["base", "1a", "2a"], threads=[1, 2])
     try:
         ax = fig.axes[0]
         found = segments(ax)
         assert len(found) == 1  # only 1a at 2 threads; base and 2a have no CI
         np.testing.assert_allclose(found[0][:, 0], [2, 2])
-        np.testing.assert_allclose(found[0][:, 1], [1.5, 2.0])
+        row = summary[summary.strategy.eq("1a")].iloc[0]
+        np.testing.assert_allclose(found[0][:, 1], [row.fieller_low, row.fieller_high])
         bars = [c for c in ax.collections if hasattr(c, "get_segments") and len(c.get_segments())]
         assert len(bars) == 1
         assert tuple(bars[0].get_colors()[0]) == to_rgba("#222")  # dark bars, not the line colour
         assert bars[0].get_linewidth()[0] == 1.2
-        assert "Error bars: 95% percentile bootstrap of reruns" in ax.get_title()
+        assert "Error bars: 95% paired Fieller interval of reruns" in ax.get_title()
     finally:
         plt.close(fig)
 
@@ -485,10 +498,10 @@ def test_throughput_title_uses_method_from_a_row_that_has_a_ci(config):
     # "base" has no spread (no CI) and sorts first; "1a" has a CI.
     frame = pd.DataFrame(two_reruns("base", 1, (100, 100)) + two_reruns("1a", 1, (100, 200)))
     (_, result), _ = collect(thrpt.prepare, frame, config)
-    assert result.set_index("strategy").interval_kind.to_dict() == {"base": "none", "1a": METHOD}
+    assert result.set_index("strategy").interval_kind.to_dict() == {"base": "none", "1a": T_METHOD}
     fig = render_throughput(result, config)
     try:
-        assert fig.axes[0].get_title().endswith(f"Error bars: {METHOD}")
+        assert fig.axes[0].get_title().endswith(f"Error bars: {T_METHOD}")
     finally:
         plt.close(fig)
 

@@ -487,7 +487,8 @@ def test_observation_columns_and_order(config):
     assert averages.columns.tolist() == [
         "benchmark_short", "strategy", "threads_blobshuffle", *AVERAGED, "n_reruns", "total_reruns",
         "contributing_reruns", "source_rows", "source_files", "original_strategies", "summary_kind",
-        "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high"]
+        "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high",
+        *[f"{m}_t_{e}" for m in AVERAGED for e in ("low", "high")]]
 
 
 # ---------------------------------------------------------------- pivots

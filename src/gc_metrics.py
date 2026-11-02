@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import LogFormatter
 
-from .utils import (ALL_RERUNS_PART, AVERAGE_PART, CI_METHOD, bootstrap_ci,
-                    cell_seed, duration_seconds, file_names, has_spread, load_ledger,
+from .utils import (ALL_RERUNS_PART, AVERAGE_PART, T_METHOD, bootstrap_ci,
+                    cell_seed, duration_seconds, file_names, has_spread, load_ledger, t_interval,
                     normalize_throughput, numeric, output_directory, output_stem, save_figure,
                     sorted_for_csv, strategy_order, warn, warn_incomplete)
 
@@ -34,6 +34,7 @@ BLANK_EFFECT = {"gc_time": "; gc_time_pct missing",
                 "aux_batches": "; batch_bytes and batch_fill missing"}
 ALLOC = "gc_alloc_rate_norm"
 ALLOC_CI = (f"{ALLOC}_ci_low", f"{ALLOC}_ci_high")
+ALLOC_T = (f"{ALLOC}_t_low", f"{ALLOC}_t_high")
 AUX_UNITS = (re.compile(r"bytes/(ns|us|ms|s)"), re.compile(r"batches/(ns|us|ms|s)"))
 
 
@@ -162,6 +163,13 @@ def prepare(frame, config):
             "summary_kind": "mean of reruns",
         })
         record[ALLOC_CI[0]], record[ALLOC_CI[1]] = _alloc_ci(group, name, benchmark, strategy, threads)
+        ordered = group.sort_values("rerun", kind="stable")  # t interval only: independent of row order
+        for metric in AVERAGED:
+            values = ordered[metric].to_numpy(dtype=float)
+            low = high = np.nan
+            if not np.isnan(values).any() and has_spread(values):
+                low, high = t_interval(values)
+            record[f"{metric}_t_low"], record[f"{metric}_t_high"] = low, high
         records.append(record)
     return observations, pd.DataFrame.from_records(records)
 
@@ -282,7 +290,7 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
 
 
 def render_alloc(averages, config, benchmark, *, strategies, threads):
-    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with resampled CI error bars."""
+    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with 95% t interval error bars."""
     import matplotlib
 
     if not config.show:
@@ -304,10 +312,10 @@ def render_alloc(averages, config, benchmark, *, strategies, threads):
         x = np.array([slots[(strategy, n)] for n in data["threads_blobshuffle"]])
         ax.bar(x, data[ALLOC], width=width, color=config.colors.get(strategy, palette(k % 10)),
                edgecolor="white", label=config.labels.get(strategy, strategy), zorder=2)
-        complete = (data[ALLOC_CI[0]].notna() & data[ALLOC_CI[1]].notna()).to_numpy()
+        complete = (data[ALLOC_T[0]].notna() & data[ALLOC_T[1]].notna()).to_numpy()
         if complete.any():
             valid = data[complete]
-            err = np.vstack([valid[ALLOC] - valid[ALLOC_CI[0]], valid[ALLOC_CI[1]] - valid[ALLOC]])
+            err = np.vstack([valid[ALLOC] - valid[ALLOC_T[0]], valid[ALLOC_T[1]] - valid[ALLOC]])
             ax.errorbar(x[complete], valid[ALLOC], yerr=err, fmt="none", color="#444",
                         elinewidth=1.5, capsize=4, zorder=3)
             bars += int(complete.sum())
@@ -315,7 +323,7 @@ def render_alloc(averages, config, benchmark, *, strategies, threads):
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel(f"{ALLOC} (B/op)")
     title = f"{benchmark} \u2014 {ALLOC}, mean of reruns"
-    ax.set_title(f"{title}\nError bars: {CI_METHOD}" if bars else title)
+    ax.set_title(f"{title}\nError bars: {T_METHOD}" if bars else title)
     ax.margins(y=0.05)
     ax.set_yscale("linear")
     ax.set_ylim(bottom=0)
