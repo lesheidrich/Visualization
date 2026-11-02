@@ -9,7 +9,7 @@ from matplotlib.ticker import LogFormatter
 from .utils import (ALL_RERUNS_PART, AVERAGE_PART, CI_METHOD, bootstrap_ci,
                     cell_seed, duration_seconds, file_names, has_spread, load_ledger,
                     normalize_throughput, numeric, output_directory, output_stem, save_figure,
-                    strategy_order, warn)
+                    sorted_for_csv, strategy_order, warn, warn_incomplete)
 
 PIVOT_METRICS = ("gc_alloc_rate_norm", "gc_count", "gc_time", "gc_time_pct",
                  "pauses_max", "pauses_p99", "batch_fill")
@@ -114,8 +114,14 @@ def prepare(frame, config):
     if over.any():
         warn(f"gc_time_pct above 100 % at ledger row(s) {_rows(observations, over)}")
     zero = observations["aux_batches"].eq(0)
-    if zero.any():
-        warn(f"Zero aux_batches at ledger row(s) {_rows(observations, zero)}; "
+    all_zero = {b for b, z in zero.groupby(observations["benchmark_short"]) if z.all()}
+    # NoFinalize benchmarks close no batch by design, so all zeros say nothing is wrong there.
+    expected = {b for b in all_zero if "NoFinalize" in b}
+    for benchmark in sorted(all_zero - expected):
+        warn(f"{benchmark}: aux_batches is 0 on every row; batch_bytes and batch_fill are blank")
+    partial = zero & ~observations["benchmark_short"].isin(all_zero)
+    if partial.any():
+        warn(f"Zero aux_batches at ledger row(s) {_rows(observations, partial)}; "
              "batch_bytes and batch_fill missing")
     with np.errstate(divide="ignore", invalid="ignore"):
         observations["batch_bytes"] = (observations["aux_recordBytes"]
@@ -135,11 +141,14 @@ def prepare(frame, config):
         count, total = len(group), int(totals[benchmark])
         name = f"{benchmark}/{strategy}/threads={threads}"
         if count < total:
-            warn(f"Incomplete coverage: {name}: {count}/{total} reruns")
+            warn_incomplete(benchmark, strategy, threads, group,
+                            observations.loc[observations["benchmark_short"].eq(benchmark), "rerun"])
         record = {"benchmark_short": benchmark, "strategy": strategy, "threads_blobshuffle": threads}
         for metric in AVERAGED:
             if group[metric].notna().all():
                 record[metric] = group[metric].mean()
+            elif benchmark in all_zero and metric in ("batch_bytes", "batch_fill"):
+                record[metric] = np.nan
             else:
                 record[metric] = np.nan
                 warn(f"Mean of reruns of {metric} missing for {name}: a contributor lacks {metric}")
@@ -149,7 +158,7 @@ def prepare(frame, config):
             "source_rows": json.dumps(group["source_row"].astype(int).tolist()),
             "source_files": json.dumps(group["source_file"].unique().tolist()) if "source_file" in group else "[]",
             "original_strategies": json.dumps(group["strategy_original"].unique().tolist()),
-            "summary_kind": "arithmetic average across reruns",
+            "summary_kind": "mean of reruns",
         })
         record[ALLOC_CI[0]], record[ALLOC_CI[1]] = _alloc_ci(group, name, benchmark, strategy, threads)
         records.append(record)
@@ -337,7 +346,7 @@ def run(config):
         benchmark_medians = medians[medians["benchmark_short"].eq(benchmark)]
         outputs.append((f"{stem('pauses_max_median')}.csv", benchmark_medians, False))
         for filename, table, index in outputs:
-            table.to_csv(directory / filename, index=index)
+            (table if index else sorted_for_csv(table, config)).to_csv(directory / filename, index=index)
             paths.append(directory / filename)
         fig = render_pauses(data, benchmark_medians, config,
                             f"{benchmark} \u2014 pauses_max, one dot per rerun",

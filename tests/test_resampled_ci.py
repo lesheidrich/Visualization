@@ -225,7 +225,7 @@ def test_throughput_partial_coverage_uses_contributing_reruns(config):
     frame = pd.DataFrame(two_reruns() + [observation("1a", "0", 2, 400), observation("1a", "1", 2, 600),
                                          observation(rerun="2", score=300)])
     (_, result), messages = collect(thrpt.prepare, frame, config)
-    assert any("2/3" in text for text in messages)
+    assert any("/thrpt missing" in text for text in messages)
     row = result[result.strategy.eq("1a")].iloc[0]
     assert row.n_reruns == 2 and row.total_reruns == 3
     # Two contributing scores 400, 600: resampled means 400, 500, 600.
@@ -385,7 +385,7 @@ def test_speedup_partial_coverage_uses_only_contributing_reruns(config):
     # The third rerun has only a base score (900); it must not enter the bootstrap or t interval.
     frame = pair_rows([observation(rerun="03", score=900)])
     (_, summary), messages = collect(speedup.prepare, frame, config)
-    assert any("2/3" in text for text in messages)
+    assert any("/thrpt missing" in text for text in messages)
     row = summary[summary.strategy.eq("1a")].iloc[0]
     assert row.n_reruns == 2 and row.total_reruns == 3
     assert row.ci_low == pytest.approx(1.5) and row.ci_high == pytest.approx(2.0)

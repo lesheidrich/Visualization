@@ -69,7 +69,8 @@ bars with a warning; malformed nonblank values fail with row/column diagnostics.
 fields than the header, such as a trailing comma, fails with its line number.
 
 One observation is allowed per benchmark/strategy/thread/rerun. Duplicate rows
-fail rather than overweight a rerun. Comparison-defining workload/JMH settings
+fail rather than overweight a rerun. CSV rows are sorted by configured strategy order, threads and rerun as the last step before writing.
+Comparison-defining workload/JMH settings
 must agree within each benchmark; a mismatch lists the offending fields. Numeric
 settings compare numerically; warmup/measurement durations accept ns/us/µs/μs/ms/s/m/h
 (a bare number means seconds). `-Dbench.threads` and `-Dbench.partitionBufferBytes`
@@ -120,7 +121,7 @@ it. The reruns share one instance, so the CI describes variation on this machine
 in this period. A group with fewer than two reruns, or with no spread, gets no CI
 and a warning (`No CI for <bench>/<strategy>/threads=<N>: ...`). If a ledger score
 has no bounds, only its per-rerun bar loses error bars. Plots carry no n labels.
-A missing rerun gives an `Incomplete coverage` warning, and the CSV keeps
+A missing rerun gives a warning such as `mb1_rawNoFinalize/2b_n04_r3/thrpt missing.`, and the CSV keeps
 `n_reruns` and `total_reruns`.
 
 CSV fields include benchmark, canonical strategy, `threads_blobshuffle`, score,
@@ -159,7 +160,7 @@ is 250 / 150 ≈ **1.667**. This differs from the mean of per-rerun ratios
 ([2, 1.5] gives 1.75), which is not used. All available reruns contribute; there
 is no rerun filter or hardcoded run count. Missing numerator observations stay
 missing, produce a coverage warning, and contribute no invented zero; their
-base scores are left out of the base mean. Plots show no n labels; check coverage in the `Incomplete coverage` warning and the `n_reruns` and `total_reruns` columns.
+base scores are left out of the base mean. Plots show no n labels; check coverage in the missing-rerun warnings and the `n_reruns` and `total_reruns` columns.
 
 Each benchmark/rerun must have exactly one positive, finite base score at one
 thread. Missing, duplicate, zero, or negative baselines fail before output

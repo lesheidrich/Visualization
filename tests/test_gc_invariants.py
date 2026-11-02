@@ -346,7 +346,7 @@ def test_other_benchmarks_threads_and_sample_rows_do_not_change_the_target(world
     assert 8 in set(perturbed[MB1]["average"]["threads_blobshuffle"])        # the new group exists
     for bench in (MB1, MB2):
         before, after = world["tables"][bench], perturbed[bench]
-        kept = lambda frame: frame[frame["threads_blobshuffle"] != 8]
+        kept = lambda frame: frame[frame["threads_blobshuffle"] != 8].reset_index(drop=True)
         pd.testing.assert_frame_equal(
             before["reruns"].drop(columns="source_file"),
             kept(after["reruns"]).drop(columns="source_file"), check_exact=False, check_dtype=False, rtol=1e-12)

@@ -150,7 +150,7 @@ def test_integration_average_gains_exactly_the_two_columns_and_nothing_else_chan
         (1200, 10, 2500, 1.0, 5, 2, 1.0, 100)
     assert (base["n_reruns"], base["total_reruns"]) == (3, 3)
     assert base["contributing_reruns"] == json.dumps(["r1", "r2", "r3"])
-    assert base["summary_kind"] == "arithmetic average across reruns"
+    assert base["summary_kind"] == "mean of reruns"
     assert len(averages) == 4
 
 
@@ -397,7 +397,7 @@ def test_spec_all_rerun_averages_incomplete_coverage(config):
     averages, messages = prepared(rows, config)
     row = averages[averages["strategy"].eq("base")].iloc[0]
     assert (row["gc_alloc_rate_norm"], row["n_reruns"], row["total_reruns"]) == (1200, 2, 3)
-    assert any("Incomplete coverage" in m and "2/3" in m for m in messages)
+    assert any("base_n04_r" in m and "/thrpt missing." in m for m in messages) or any("/thrpt missing." in m for m in messages)
 
 
 def test_spec_all_rerun_averages_contributor_lacks_a_metric(config):

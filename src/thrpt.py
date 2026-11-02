@@ -7,7 +7,7 @@ from matplotlib.ticker import FuncFormatter
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
                     AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
-                    output_stem, rerun_part, save_figure, strategy_order, t_interval, warn)
+                    output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, t_interval, warn, warn_incomplete)
 
 
 LEDGER_BOUNDS = "ledger confidence bounds"
@@ -29,7 +29,8 @@ def prepare(frame, config):
         count = len(group)
         total = int(totals[benchmark])
         if count < total:
-            warn(f"Incomplete coverage: {benchmark}/{strategy}/threads={threads}: {count}/{total} reruns")
+            warn_incomplete(benchmark, strategy, threads, group,
+                            observations.loc[observations["benchmark_short"].eq(benchmark), "rerun"])
         # Sorted by rerun for the CI only, so the result does not depend on ledger row order.
         scores = group.sort_values("rerun", kind="stable")["score"].to_numpy()
         ci = {name: np.nan for name in ("ci_low", "ci_high", "t_low", "t_high",
@@ -122,7 +123,7 @@ def run(config):
         for suffix, title, table in tables:
             stem = directory / output_stem("thrpt", benchmark_names[benchmark], suffix)
             csv_path = stem.with_suffix(".csv")
-            table.to_csv(csv_path, index=False)
+            sorted_for_csv(table, config).to_csv(csv_path, index=False)
             paths.append(csv_path)
             fig = render(table, config, title, strategies=order, threads=threads)
             import matplotlib.pyplot as plt

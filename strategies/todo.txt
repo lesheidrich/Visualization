@@ -22,7 +22,6 @@ TODO (written 2026-11-02)
 
 Two things outside your list that also need doing:
 - Real ledger: run everything on it when your runs finish. docs/ledger_all.xlsx was the first real-format test (one rerun).
-- Excel: the commands read CSV or TSV only, so an .xlsx ledger must be exported first.
 
 Ideas from research_questions.txt. Not built. Nobody has decided whether to build them.
 
@@ -57,5 +56,3 @@ Outside the list, also needed.
     score is records per ms and pauses_* and gc_time are in ms.
     Still to check on the final ledger: no reruns or jobs are missing, and order_unbalanced.
 
-[ ] Excel ledgers
-    The commands read CSV or TSV only. docs/ledger_all.xlsx had to be exported first.

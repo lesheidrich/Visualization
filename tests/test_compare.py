@@ -86,13 +86,13 @@ def table(rs, tmp_path, margin=0.05):
 
 def test_missing_pair_names_benchmark_thread_rerun(tmp_path):
     rs = [r for r in rows() if not (r["strategy"] == "2b" and r["rerun"] == "04" and r["threads_blobshuffle"] == "2")]
-    with pytest.raises(ValueError, match=r"mb1_rawNoFinalize.*threads=2.*rerun 04"):
+    with pytest.raises(ValueError, match=r"mb1_rawNoFinalize/2a_n02_r04/thrpt missing 2b partner \(ledger row \d+\)\."):
         table(rs, tmp_path)
 
 
 def test_rerun_missing_from_both_at_one_thread_count(tmp_path):
     rs = [r for r in rows() if not (r["rerun"] == "04" and r["threads_blobshuffle"] == "2")]
-    with pytest.raises(ValueError, match=r"threads=2.*rerun 04"):
+    with pytest.raises(ValueError, match=r"2a_n02_r04/thrpt and 2b_n02_r04 are both missing"):
         table(rs, tmp_path)
 
 
@@ -361,7 +361,7 @@ def test_failure_leaves_no_output_folder(tmp_path):
     config.write_text(yaml.safe_dump({"input": {"path": "in.csv"}, "output": {"directory": "out"},
                                       "benchmarks": ["mb1_rawNoFinalize"]}))
     result = invoke("compare", config, tmp_path)
-    assert result.returncode == 1 and "rerun 04" in result.stderr
+    assert result.returncode == 1 and "_r04/thrpt missing" in result.stderr
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
 
 

@@ -2,6 +2,7 @@
 
 Expected values are literals, or are computed here by a separate resampling written out in the test.
 """
+import dataclasses
 import json
 from pathlib import Path
 import random
@@ -434,3 +435,88 @@ def test_throughput_ticks_are_plain_numbers_in_ops_per_second(config):
     assert ax.yaxis.get_offset_text().get_text() == ""
     assert any("," in tick.get_text() for tick in ax.get_yticklabels())
     assert ax.get_ylabel() == "Throughput (ops/s)"
+
+
+# ---------------------------------------------------------------- finding missing data
+
+
+def test_missing_pair_reads_like_the_ledger_tag(tmp_path):
+    rows = [observation("2a", r, 1, 100 + i, run_tag=f"2a_n01_r{r}") for i, r in enumerate("12")]
+    rows += [observation("2b", "1", 1, 100, run_tag="2b_n01_r1"), observation("2b", "2", 1, 100, run_tag="2b_n01_r2")]
+    rows += [observation("2a", "2", 4, 100, run_tag="2a_n04_r2"),
+             observation("2a", "1", 4, 100, run_tag="2a_n04_r1"), observation("2b", "1", 4, 100, run_tag="2b_n04_r1")]
+    config = Config(tmp_path / "ledger.csv", tmp_path / "out", benchmarks=(BENCH,))
+    with pytest.raises(ValueError) as caught:
+        compare_prepare(pd.DataFrame(rows), config)
+    assert str(caught.value) == f"{BENCH}/2a_n04_r2/thrpt missing 2b partner (ledger row 6)."
+
+
+def test_missing_base_names_its_tag_and_a_row_of_that_rerun(config):
+    rows = [observation("base", "1", 1, 100), observation("1a", "1", 1, 90), observation("1a", "2", 1, 90)]
+    with pytest.raises(ValueError) as caught:
+        speedup.prepare(pd.DataFrame(rows), config)
+    assert f"{BENCH}/base_n01_r2/thrpt missing (ledger row 4 is in that rerun)" in str(caught.value)
+
+
+@pytest.mark.parametrize("module", [thrpt, speedup])
+def test_coverage_warning_is_the_missing_tag(config, module):
+    rows = [observation("base", r, 1, 100) for r in "123"] + [observation("1a", r, 4, 100) for r in "13"]
+    with pytest.warns(UserWarning) as seen:
+        module.prepare(pd.DataFrame(rows), config)
+    assert f"{BENCH}/1a_n04_r2/thrpt missing." in [str(w.message) for w in seen]
+
+
+MB2 = "mb2_rawFinalize"
+
+
+def test_no_batch_warning_for_no_finalize_benchmarks_but_one_for_mb2(config):
+    rows = [gc_observation(strategy="base", rerun=r, aux_batches="0") for r in "12"]
+    rows += [gc_observation(strategy="base", rerun=r, benchmark_short=MB2, aux_batches="0") for r in "12"]
+    config = dataclasses.replace(config, benchmarks=(BENCH, MB2))
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        _, averages = gc_metrics.prepare(pd.DataFrame(rows), config)
+    text = [str(w.message) for w in seen]
+    assert not any(BENCH in m and "batch" in m for m in text)
+    assert sum(f"{MB2}: aux_batches is 0 on every row" in m for m in text) == 1
+    assert averages.batch_fill.isna().all()
+
+
+def test_partial_zero_batches_on_mb2_name_the_rows(config):
+    rows = [gc_observation(strategy="base", rerun="1", benchmark_short=MB2, aux_batches="0"),
+            gc_observation(strategy="base", rerun="2", benchmark_short=MB2)]
+    config = dataclasses.replace(config, benchmarks=(MB2,))
+    with pytest.warns(UserWarning, match=re.escape("Zero aux_batches at ledger row(s) [2]")):
+        gc_metrics.prepare(pd.DataFrame(rows), config)
+
+
+# ---------------------------------------------------------------- sorted CSV rows
+
+
+def shuffled_rows():
+    rows = [observation(s, r, t, 100 + i) for i, (s, t, r) in enumerate(
+        [("1a", 2, "10"), ("base", 1, "2"), ("1a", 1, "2"), ("1a", 2, "2"), ("base", 1, "10"), ("1a", 1, "10")])]
+    return rows
+
+
+def test_sorted_for_csv_orders_rows_and_keeps_every_value(config):
+    from src.utils import sorted_for_csv
+    frame = pd.DataFrame(shuffled_rows())
+    result = sorted_for_csv(frame, config)
+    assert list(zip(result.strategy, result.threads_blobshuffle, result.rerun)) == [
+        ("base", "1", "2"), ("base", "1", "10"), ("1a", "1", "2"), ("1a", "1", "10"), ("1a", "2", "2"), ("1a", "2", "10")]
+    pd.testing.assert_frame_equal(result.sort_index(), frame)
+
+
+@pytest.mark.parametrize("module,stem", [(thrpt, "thrpt"), (speedup, "speedup")])
+def test_csvs_are_sorted_and_plots_do_not_change(config, module, stem, tmp_path):
+    write_ledger(config, shuffled_rows())
+    paths = quiet(module.run, config)
+    table = pd.read_csv(next(p for p in paths if p.name.endswith("_avg.csv")), dtype=str)
+    assert table.strategy.tolist() == ["base", "1a", "1a"]
+    assert table.threads_blobshuffle.tolist() == ["1", "1", "2"]
+    first = {p.name: p.read_bytes() for p in paths if p.suffix == ".png"}
+    ordered = sorted(shuffled_rows(), key=lambda r: (r["strategy"] != "base", r["strategy"], int(r["threads_blobshuffle"]), int(r["rerun"])))
+    write_ledger(config, ordered)
+    second = quiet(module.run, config)
+    assert {p.name: p.read_bytes() for p in second if p.suffix == ".png"} == first

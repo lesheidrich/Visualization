@@ -29,6 +29,34 @@ def warn(message):
     warnings.warn(message, UserWarning, stacklevel=2)
 
 
+def run_tag(strategy, threads, rerun):
+    """The ledger's tag form: strategy, thread count and rerun."""
+    return f"{strategy}_n{int(threads):02d}_r{rerun}"
+
+
+def row_tag(row):
+    """A row's own run_tag, or the same form built from its fields."""
+    tag = str(row.get("run_tag", "")).strip()
+    return tag if tag not in ("", "nan") else run_tag(row["strategy"], row["threads_blobshuffle"], row["rerun"])
+
+
+def warn_incomplete(benchmark, strategy, threads, group, all_reruns):
+    """One readable warning per rerun that a group lacks."""
+    for rerun in sorted(set(all_reruns) - set(group["rerun"])):
+        warn(f"{benchmark}/{run_tag(strategy, threads, rerun)}/thrpt missing.")
+
+
+def sorted_for_csv(table, config):
+    """Rows by configured strategy order, threads and rerun. The last step before writing a CSV."""
+    order = {name: i for i, name in enumerate(strategy_order(table, config))}
+    keys = pd.DataFrame({"strategy": table["strategy"].map(order),
+                         "threads": pd.to_numeric(table["threads_blobshuffle"])}, index=table.index)
+    if "rerun" in table:
+        numbers = pd.to_numeric(table["rerun"], errors="coerce")
+        keys["rerun"] = numbers if numbers.notna().all() else table["rerun"].astype(str)
+    return table.loc[keys.sort_values(list(keys.columns), kind="stable").index]
+
+
 def strategy_key(value):
     """Canonical identifier, independent of its display label (draft behaviour)."""
     return re.sub(r"\.0$", "", str(value).strip().lower())

@@ -94,7 +94,7 @@ def test_all_reruns_and_separate_threads(config, count, expected):
 
 def test_missing_numerator_warns_and_uses_available_ratios(config):
     rows = pair_fixture().to_dict("records") + [observation(rerun="third", score=100)]
-    with pytest.warns(UserWarning, match="2/3 reruns"):
+    with pytest.warns(UserWarning, match="/thrpt missing"):
         individual, summary = prepare(pd.DataFrame(rows), config)
     row = summary[summary.strategy.eq("1a")].iloc[0]
     assert row.speedup == 1.6666666666666667  # 250 / 150; base 900 of "third" must not count
@@ -104,8 +104,8 @@ def test_missing_numerator_warns_and_uses_available_ratios(config):
 
 
 @pytest.mark.parametrize("rows,match", [
-    ([observation("1a", "unpaired", 2, 100)], "Missing base.*unpaired"),
-    ([observation(score=0)], "Baseline score must be positive.*01"),
+    ([observation("1a", "unpaired", 2, 100)], "base_n01_runpaired/thrpt missing"),
+    ([observation(score=0)], "Baseline score must be positive.*base_n01_r01"),
     ([observation(score=-1)], "score must be nonnegative.*mb1_rawNoFinalize.*01"),
     ([observation(), observation()], "Duplicate throughput observations.*mb1_rawNoFinalize.*01"),
     ([observation(score=1e-300), observation("1a", score=1e300)], "Nonfinite speedup"),
@@ -182,7 +182,7 @@ def test_unknown_strategy_and_colors_stable_across_reruns(config):
     rows = [observation(), observation("new", score=100), observation(rerun="B"),
             observation("1a", "B", score=100), observation("new", "B", score=100)]
     with pytest.warns(UserWarning, match="Unknown strategies"):
-        with pytest.warns(UserWarning, match="Incomplete coverage"):
+        with pytest.warns(UserWarning, match="/thrpt missing"):
             observations, _ = prepare(pd.DataFrame(rows), config)
     from src.utils import strategy_order
     order = strategy_order(observations, config)
@@ -217,7 +217,7 @@ def test_exports_and_figure_lifecycle(config, formats):
 
 def test_invalid_pairing_creates_no_output(config):
     pd.DataFrame([observation("1a")]).to_csv(config.ledger, index=False)
-    with pytest.raises(ValueError, match="Missing base"):
+    with pytest.raises(ValueError, match="thrpt missing"):
         run(config)
     assert not config.output.exists()
 
@@ -277,7 +277,7 @@ def test_aggregate_speedup_errorbars_are_dark_thin_capped_and_on_top(config):
 def test_plot_has_no_n_labels_and_partial_coverage_still_warns(config):
     rows = (_two_reruns("base", 1, 100) + _two_reruns("1a", 1, 100) + _two_reruns("1a", 2, 150)
             + _two_reruns("2a", 2, 150)[:1])
-    with pytest.warns(UserWarning, match="Incomplete coverage"):
+    with pytest.warns(UserWarning, match="/thrpt missing"):
         fig = _aggregate_render(config, rows, [1, 2])
     try:
         labels = [t.get_text() for t in fig.axes[0].get_xticklabels()]

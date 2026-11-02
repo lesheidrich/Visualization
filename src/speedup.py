@@ -6,7 +6,7 @@ import pandas as pd
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
                     AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
-                    output_stem, rerun_part, save_figure, strategy_order, t_interval, warn)
+                    output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, run_tag, t_interval, warn, warn_incomplete)
 
 
 def prepare(frame, config):
@@ -20,10 +20,18 @@ def prepare(frame, config):
     missing = required.merge(base[keys], on=keys, how="left", indicator=True)
     missing = missing[missing["_merge"].eq("left_only")]
     if not missing.empty:
-        raise ValueError(f"Missing base at one thread for benchmark/rerun: {missing[keys].to_dict('records')}")
+        details = []
+        for record in missing[keys].to_dict("records"):
+            rows = observations[observations["benchmark_short"].eq(record["benchmark_short"])
+                                & observations["rerun"].eq(record["rerun"])]
+            details.append(f"{record['benchmark_short']}/{run_tag('base', 1, record['rerun'])}/thrpt missing "
+                           f"(ledger row {int(rows['source_row'].iloc[0])} is in that rerun)")
+        raise ValueError("Speedup needs base at one thread in every rerun: " + "; ".join(details))
     invalid = base[base["score"].le(0)]
     if not invalid.empty:
-        raise ValueError(f"Baseline score must be positive for benchmark/rerun: {invalid[keys].to_dict('records')}")
+        details = [f"{r['benchmark_short']}/{run_tag('base', 1, r['rerun'])}/thrpt (ledger row {int(r['source_row'])})"
+                   for _, r in invalid.iterrows()]
+        raise ValueError("Baseline score must be positive: " + "; ".join(details))
     # Keep source fields only; unused throughput intervals are not ratio bounds.
     bound_columns = {"score_confidence_low", "score_confidence_high", "score_error"}
     observations = observations.drop(columns=list(bound_columns & set(observations.columns)))
@@ -50,7 +58,8 @@ def prepare(frame, config):
     ):
         count, total = len(group), int(totals[benchmark])
         if count < total:
-            warn(f"Incomplete coverage: {benchmark}/{strategy}/threads={threads}: {count}/{total} reruns")
+            warn_incomplete(benchmark, strategy, threads, group,
+                            observations.loc[observations["benchmark_short"].eq(benchmark), "rerun"])
         # Divide before summing to avoid overflowing an otherwise finite mean.
         mean_score = (group["score"] / count).sum()
         mean_baseline = (group["baseline_score"] / count).sum()
@@ -150,7 +159,7 @@ def run(config):
         for suffix, title, table in tables:
             stem = directory / output_stem("speedup", benchmark_names[benchmark], suffix)
             csv_path = stem.with_suffix(".csv")
-            table.to_csv(csv_path, index=False)
+            sorted_for_csv(table, config).to_csv(csv_path, index=False)
             paths.append(csv_path)
             fig = render(table, config, title, strategies=order, threads=threads)
             import matplotlib.pyplot as plt

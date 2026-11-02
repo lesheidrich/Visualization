@@ -60,7 +60,7 @@ def test_missing_bound_columns(config, ledger):
 
 def test_incomplete_coverage(config):
     frame = pd.DataFrame([observation(), observation(rerun="B"), observation(strategy="1a", score=200)])
-    with pytest.warns(UserWarning, match="Incomplete coverage"):
+    with pytest.warns(UserWarning, match="/thrpt missing"):
         _, result = prepare(frame, config)
     missing = result[result["strategy"].eq("1a")].iloc[0]
     assert missing["n_reruns"] == 1 and missing["total_reruns"] == 2

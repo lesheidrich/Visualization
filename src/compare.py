@@ -6,7 +6,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .utils import (bootstrap_ci, cell_seed, file_names, has_spread, load_ledger,
+from .utils import (row_tag, run_tag, bootstrap_ci, cell_seed, file_names, has_spread, load_ledger,
                     normalize_throughput, output_directory, output_stem, t_quantile, warn,
                     AVERAGE_PART)
 
@@ -170,10 +170,18 @@ def prepare(frame, config, first="2a", second="2b"):
             for rerun in reruns:
                 for strategy in (first, second):
                     if (strategy, threads, rerun) not in keyed:
-                        raise ValueError(f"{benchmark}: threads={threads}, rerun {rerun}: missing {strategy}")
-                    if pair.loc[keyed[(strategy, threads, rerun)], "score"] <= 0:
-                        raise ValueError(f"{benchmark}: threads={threads}, rerun {rerun}: "
-                                         f"score of {strategy} must be positive")
+                        other = second if strategy == first else first
+                        partner = keyed.get((other, threads, rerun))
+                        if partner is None:
+                            raise ValueError(f"{benchmark}/{run_tag(first, threads, rerun)}/thrpt and "
+                                             f"{run_tag(second, threads, rerun)} are both missing.")
+                        row = pair.loc[partner]
+                        raise ValueError(f"{benchmark}/{row_tag(row)}/thrpt missing {strategy} partner "
+                                         f"(ledger row {int(row['source_row'])}).")
+                    row = pair.loc[keyed[(strategy, threads, rerun)]]
+                    if row["score"] <= 0:
+                        raise ValueError(f"{benchmark}/{row_tag(row)}/thrpt score must be positive "
+                                         f"(ledger row {int(row['source_row'])}).")
         records = []
         for threads in thread_counts:
             rows_a = pair.loc[[keyed[(first, threads, r)] for r in reruns]]
