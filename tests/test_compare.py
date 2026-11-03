@@ -325,7 +325,7 @@ def noisy_ledger(path, benchmarks=("mb1_rawNoFinalize", "mb2_rawFinalize")):
     pd.DataFrame(rs).rename(columns={"strategy": ""}).to_csv(path, index=False)
 
 
-def test_command_writes_one_csv_per_benchmark_and_no_plot(tmp_path):
+def test_command_writes_one_csv_and_one_ratio_plot_per_benchmark(tmp_path):
     noisy_ledger(tmp_path / "in.csv")
     config = write_config(tmp_path, {"output": {"directory": "out"}, "comparison": {"margin": 0.05},
                                      "benchmarks": ["mb1_rawNoFinalize", "mb2_rawFinalize"]})
@@ -335,8 +335,9 @@ def test_command_writes_one_csv_per_benchmark_and_no_plot(tmp_path):
     result = invoke("compare", config, tmp_path)
     assert result.returncode == 0, result.stderr
     paths = [Path(line) for line in result.stdout.splitlines()]
-    assert [p.name for p in paths] == ["compare_mb1_rawNoFinalize_avg.csv", "compare_mb2_rawFinalize_avg.csv"]
-    assert paths[0].parent.name.endswith("_compare") and list(paths[0].parent.iterdir()) == paths
+    assert [p.name for p in paths] == ["compare_mb1_rawNoFinalize_avg.csv", "compare_mb1_rawNoFinalize_ratio.png",
+                                       "compare_mb2_rawFinalize_avg.csv", "compare_mb2_rawFinalize_ratio.png"]
+    assert paths[0].parent.name.endswith("_compare") and sorted(paths[0].parent.iterdir()) == sorted(paths)
     first = pd.read_csv(paths[0])
     assert list(first.columns) == COLUMNS
     assert first.threads_blobshuffle.tolist() == [1, 2, 4, 8, 16]
@@ -346,7 +347,7 @@ def test_command_writes_one_csv_per_benchmark_and_no_plot(tmp_path):
     assert first.smallest_provable_margin.iloc[0] == pytest.approx(0.013773, **APPROX)
     assert json.loads(first.contributing_reruns.iloc[0]) == [f"{i:02d}" for i in range(1, 11)]
     assert first.ci_seed.notna().all() and (first.ci_resamples == 10000).all()
-    second = pd.read_csv(paths[1])
+    second = pd.read_csv(paths[2])
     assert second.equiv_high.iloc[0] == pytest.approx(1.020070, **APPROX)
     again = invoke("compare", config, tmp_path)
     assert again.returncode == 0
@@ -386,6 +387,8 @@ def test_sample_ledger_says_no_spread_everywhere(tmp_path):
     result = invoke("compare", config, tmp_path)
     assert result.returncode == 0, result.stderr
     for line in result.stdout.splitlines():
+        if not line.endswith(".csv"):
+            continue
         t = pd.read_csv(line)
         assert (t.verdict == "no spread observed").all()
         assert t[["diff_low", "equiv_low", "smallest_provable_margin", "boot95_low"]].isna().all().all()

@@ -1,4 +1,4 @@
-"""Paired 2A vs 2B comparison: log-t intervals, equivalence verdict and flags (table only)."""
+"""Paired 2A vs 2B comparison: log-t intervals, equivalence verdict and flags and the ratio plot."""
 from datetime import datetime
 import json
 import math
@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import (row_tag, run_tag, bootstrap_ci, cell_seed, file_names, has_spread, load_ledger,
-                    normalize_throughput, output_directory, output_stem, t_quantile, warn,
+                    normalize_throughput, output_directory, output_stem, save_figure, t_quantile, warn,
                     AVERAGE_PART)
 
 FAMILY_ALPHA = 0.05
@@ -221,14 +221,86 @@ def prepare(frame, config, first="2a", second="2b"):
     return tables
 
 
+def _level(value):
+    return f"{round(value * 100, 6):g}%"
+
+
+def render_ratio(table, config, benchmark):
+    """Dot at logt_ratio per thread count, thick bar equiv_low..equiv_high, thin bar diff_low..diff_high.
+
+    Everything comes from the prepared table and `config.comparison_margin`; nothing is recalculated."""
+    import matplotlib
+
+    if not config.show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    data = table.sort_values("threads_blobshuffle")
+    margin = getattr(config, "comparison_margin", None)
+    x = np.arange(len(data))
+    ratio = data["logt_ratio"].to_numpy(dtype=float)
+    bounds = {c: data[c].to_numpy(dtype=float) for c in ("equiv_low", "equiv_high", "diff_low", "diff_high")}
+    fig, ax = plt.subplots(figsize=config.figsize)
+    colour, grey = "#1f77b4", "#555"
+    drawn = {"equiv": np.isfinite(bounds["equiv_low"]) & np.isfinite(bounds["equiv_high"]),
+             "diff": np.isfinite(bounds["diff_low"]) & np.isfinite(bounds["diff_high"])}
+    for key, width in (("diff", 1.5), ("equiv", 6)):
+        keep = drawn[key]
+        ax.vlines(x[keep], bounds[f"{key}_low"][keep], bounds[f"{key}_high"][keep], color=colour,
+                  linewidth=width, alpha=0.45 if key == "equiv" else 1, zorder=2)
+    ax.plot(x, ratio, linestyle="none", marker="o", color="black", markersize=5, zorder=3)
+    values = [ratio, np.array([1.0])]
+    values += [bounds[c][drawn[c.split("_")[0]]] for c in bounds]
+    handles = [Line2D([], [], linestyle="none", marker="o", color="black", markersize=5,
+                      label="geometric mean ratio"),
+               Line2D([], [], color=colour, linewidth=6, alpha=0.45,
+                      label=f"{_level(data['equiv_level'].iloc[0])} equivalence interval"),
+               Line2D([], [], color=colour, linewidth=1.5,
+                      label=f"{_level(data['diff_level'].iloc[0])} difference interval")]
+    if margin is not None:
+        for line in (1 + margin, 1 / (1 + margin)):
+            ax.axhline(line, color=grey, linestyle="--", linewidth=1, zorder=1)
+        values.append(np.array([1 + margin, 1 / (1 + margin)]))
+        handles.append(Line2D([], [], color=grey, linestyle="--", linewidth=1,
+                              label=f"margin {margin * 100:g}%"))
+    ax.axhline(1, color=grey, linestyle="-", linewidth=1, zorder=1)
+    handles.append(Line2D([], [], color=grey, linewidth=1, label="no difference"))
+    every = np.concatenate(values)
+    low, high = float(every.min()), float(every.max())
+    pad = (high - low) * 0.05 or 0.01
+    ax.set_yscale("linear")
+    ax.set_ylim(low - pad, high + pad)
+    ax.set_xticks(x, [str(int(n)) for n in data["threads_blobshuffle"]])
+    ax.set_xlabel("BlobShuffle threads")
+    ax.set_ylabel("2A / 2B throughput ratio")
+    ax.set_title(f"{benchmark} \u2014 2A / 2B, geometric mean of per-rerun ratios")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(handles=handles, bbox_to_anchor=(1.02, 1), loc="upper left")
+    return fig
+
+
 def run(config):
-    """All validation happens before the output folder exists."""
+    """All validation, and every figure, happens before the output folder exists."""
+    import matplotlib.pyplot as plt
+
     tables = prepare(load_ledger(config.ledger, config.delimiter), config)
     names = file_names(config.benchmarks, "benchmark")
-    directory = output_directory(config.output, FEATURE)
-    paths = []
-    for benchmark in config.benchmarks:
-        path = directory / (output_stem(FEATURE, names[benchmark], AVERAGE_PART) + ".csv")
-        tables[benchmark].to_csv(path, index=False)
-        paths.append(path)
+    figures = {}
+    try:
+        for benchmark in config.benchmarks:
+            figures[benchmark] = render_ratio(tables[benchmark], config, benchmark)
+        directory = output_directory(config.output, FEATURE)
+        paths = []
+        for benchmark in config.benchmarks:
+            path = directory / (output_stem(FEATURE, names[benchmark], AVERAGE_PART) + ".csv")
+            tables[benchmark].to_csv(path, index=False)
+            paths.append(path)
+            paths.extend(save_figure(figures[benchmark], directory / output_stem(FEATURE, names[benchmark], "ratio"),
+                                     config))
+            if config.show:
+                plt.show()
+    finally:
+        for fig in figures.values():
+            plt.close(fig)
     return paths

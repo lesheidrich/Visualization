@@ -92,6 +92,7 @@ exists, the run waits for the next free second, so it never overwrites anything.
 | `thrpt_mb1_rawNoFinalize_r05.png` | Throughput, rerun 05 |
 | `speedup_mb1_rawNoFinalize_avg.csv` | Speedup, summary across all reruns |
 | `compare_mb1_rawNoFinalize_avg.csv` | 2A vs 2B comparison, one row per thread count |
+| `compare_mb1_rawNoFinalize_ratio.png` | 2A / 2B ratio per thread count, with its intervals |
 | `gc_mb1_rawNoFinalize_r_all.csv` | GC metrics, one row per strategy, thread count and rerun |
 | `gc_mb1_rawNoFinalize_gc_time_pivot.csv` | GC time, strategy by thread count |
 | `gc_mb1_rawNoFinalize_gc_alloc_rate_norm.png` | gc_alloc_rate_norm, mean of reruns |
@@ -317,8 +318,10 @@ requested or has no `batch_fill` mean, no file is written. The plot has no notes
 ## 2A vs 2B comparison
 
 `uv run compare [--config PATH]` compares strategies 2A and 2B (they differ only in merge
-order) per benchmark and thread count. It draws no plot and writes one table per benchmark,
-`compare_<benchmark>_avg.csv`, into `..._compare/`, thread counts ascending.
+order) per benchmark and thread count. It writes one table per benchmark,
+`compare_<benchmark>_avg.csv`, into `..._compare/`, thread counts ascending, and one plot per
+benchmark, `compare_<benchmark>_ratio.<fmt>` (one file per format in `output.formats`), drawn from
+that table. There is no separate command.
 
 For each rerun it takes y = ln(2a score / 2b score) from the same rerun. With n reruns, the mean
 of y and the sample SD s give the paired log-t interval exp(mean y -/+ t * s / sqrt(n)), t with
@@ -336,6 +339,18 @@ the configured setting: a blank `margin` means none was configured); `equivalent
 `inconclusive`. The margin m is `comparison.margin` in `config.yaml` (a fraction, 0.05 shipped,
 reasoning in the comment there). Without it, `equivalent` is never issued and a warning says so.
 Error rates are nominal: they assume independent reruns and roughly normal log ratios.
+
+The ratio plot has one dot per thread count at `logt_ratio`, at evenly spaced positions in
+ascending order with the thread counts as tick labels; the y-axis is linear and includes 1.
+The thick bar is the equivalence interval (`equiv_low` to `equiv_high`) and the thin bar is the
+difference interval (`diff_low` to `diff_high`); the legend names each with its level, from
+`equiv_level` and `diff_level`, as a percentage (for example 98% and 99% for five thread counts).
+A row with `no spread observed` has its dot and no bars. A solid line marks ratio 1. With a margin
+configured, dashed lines mark 1 + margin and 1 / (1 + margin) and the axis includes them; without
+one there are no margin lines. The bootstrap columns and `ratio_of_means` are not drawn. The x
+label is `BlobShuffle threads`, the y label `2A / 2B throughput ratio`, and the title names the
+benchmark and `geometric mean of per-rerun ratios`. The plot has no other text and adds no
+warning; verdicts, notes and flags stay in the table.
 
 Every rerun seen for either strategy must exist for both at every thread count, with positive
 scores and at least two reruns; otherwise the command fails naming benchmark, thread count and

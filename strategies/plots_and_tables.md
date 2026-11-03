@@ -34,7 +34,8 @@ We never average CI bounds.
 | | | Plots from that table | See below | |
 | 3 | Speedup | Plot per rerun | ✓ | `uv run speedup`. Values only, no CI possible. |
 | | | Plot across reruns | ✓ | Line is a ratio of means, mean(strategy) / mean(base). Error bars are the 95% paired Fieller interval (`fieller_low`, `fieller_high`). The resampled CI (`ci_low`, `ci_high`) and the t interval on the per-rerun ratios (`t_low`, `t_high`) are in the CSV for checks, not drawn. |
-| 4 | 2A vs 2B comparison | Table | ✓ | Done: `uv run compare` (`add-2a-2b-comparison`). Paired log-t intervals at 99% and 98% (five thread counts), the smallest provable margin and a verdict per thread count, no plot. Research in [comparison_2a_2b.md](comparison_2a_2b.md). |
+| 4 | 2A vs 2B comparison | Table | ✓ | Done: `uv run compare` (`add-2a-2b-comparison`). Paired log-t intervals at 99% and 98% (five thread counts), the smallest provable margin and a verdict per thread count. Research in [comparison_2a_2b.md](comparison_2a_2b.md). |
+| | | Plot of the ratio | ✓ | Done: `uv run compare` also saves `compare_<benchmark>_ratio` (`add-compare-plot`): per thread count a dot at `logt_ratio`, a thick bar for the equivalence interval, a thin bar for the difference interval, and lines at 1 and at the margin. Drawn from the same table; the CSV is unchanged. |
 
 **Idea for later, not planned:** cost/latency graph. Cost is not measurable yet.
 

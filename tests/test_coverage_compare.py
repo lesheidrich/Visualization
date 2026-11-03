@@ -57,10 +57,10 @@ def run(tmp_path, capsys):
     return {"dir": folder, "printed": printed, "warns": warns}
 
 
-def test_shape_one_csv_no_plot(run):
-    assert [p.name for p in run["dir"].iterdir()] == [f"compare_{BENCH}_avg.csv"]
+def test_shape_one_csv_and_one_ratio_plot(run):
+    assert sorted(p.name for p in run["dir"].iterdir()) == [f"compare_{BENCH}_avg.csv", f"compare_{BENCH}_ratio.png"]
     assert run["dir"].name.endswith("_compare")
-    assert [p.split("/")[-1] for p in run["printed"]] == [f"compare_{BENCH}_avg.csv"]
+    assert [p.split("/")[-1] for p in run["printed"]] == [f"compare_{BENCH}_avg.csv", f"compare_{BENCH}_ratio.png"]
 
 
 def test_columns_rows_and_literal_cells_with_spread(run):
