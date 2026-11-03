@@ -144,16 +144,17 @@ def normalize_throughput(frame, benchmarks, labels, *, include_bounds=True, excl
     for col in ("strategy", "benchmark_short", "mode", "rerun", "score_unit"):
         frame[col] = frame[col].fillna("").astype(str).str.strip()
     frame = frame[frame["mode"].eq("thrpt") & frame["benchmark_short"].isin(benchmarks)].copy()
-    absent = set(benchmarks) - set(frame["benchmark_short"])
-    if absent:
-        raise ValueError(f"No throughput results for benchmark(s): {sorted(absent)}")
-    for col in ("strategy", "rerun"):
-        if frame[col].eq("").any():
-            raise ValueError(f"Missing {col} at ledger row(s) {frame.loc[frame[col].eq(''), 'source_row'].tolist()}")
+    if frame["strategy"].eq("").any():
+        raise ValueError(f"Missing strategy at ledger row(s) {frame.loc[frame['strategy'].eq(''), 'source_row'].tolist()}")
     frame["strategy_original"] = frame["strategy"]
     frame["strategy"] = frame["strategy"].map(strategy_key)
     if exclude:  # configured exclusion: gone before any later check or warning
         frame = frame[~frame["strategy"].isin({strategy_key(key) for key in exclude})].copy()
+    absent = set(benchmarks) - set(frame["benchmark_short"])
+    if absent:
+        raise ValueError(f"No throughput results for benchmark(s): {sorted(absent)}")
+    if frame["rerun"].eq("").any():
+        raise ValueError(f"Missing rerun at ledger row(s) {frame.loc[frame['rerun'].eq(''), 'source_row'].tolist()}")
     unknown = sorted(set(frame["strategy"]) - set(labels))
     if unknown:
         warn(f"Unknown strategies retained: {unknown}")

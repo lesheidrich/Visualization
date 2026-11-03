@@ -114,6 +114,7 @@ def test_normalize_throughput_drops_the_excluded_rows_before_any_check():
     kept = normalize_throughput(pd.DataFrame(rows), (BENCH,), {}, exclude=("2null",))
     assert len(kept) == 21 and set(kept["strategy"]) == {"base", "1a", "2a", "2b"}
     assert kept["score"].tolist()[:7] == [100.0, 50.0, 150.0, 110.0, 130.0, 100.0, 120.0]
+    assert len(normalize_throughput(pd.DataFrame(rows), (BENCH,), {}, exclude=("2NULL",))) == 21  # config spelling too
 
 
 def test_normalize_throughput_exclusion_gives_no_unknown_strategy_warning():
@@ -358,3 +359,19 @@ def test_readme_documents_strategies_exclude():
         assert part in text, part
     plan = re.sub(r"\s+", " ", (Path(__file__).parents[1] / "strategies" / "plots_and_tables.md").read_text())
     assert "`strategies.exclude: [2null]`" in plan and "none of the four commands draws or tabulates it" in plan
+
+
+@pytest.mark.parametrize("name", MAINS, ids=MAIN_IDS)
+def test_blank_rerun_on_excluded_row_does_not_stop_the_run(tmp_path, name):
+    rows = make_rows()
+    for row in rows:
+        if row["strategy"] == "2null":
+            row["rerun"] = ""
+    code, paths, _, error = invoke(name, project(tmp_path, rows, ["2null"]))
+    assert code == 0 and error == "" and len(paths) > 0
+
+
+@pytest.mark.parametrize("name", MAINS, ids=MAIN_IDS)
+def test_only_excluded_rows_fail_cleanly(tmp_path, name):
+    code, paths, _, error = invoke(name, project(tmp_path, make_rows(values=EXCLUDED), ["2null"]))
+    assert code == 1 and paths == [] and f"No throughput results for benchmark(s): ['{BENCH}']" in error

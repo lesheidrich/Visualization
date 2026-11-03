@@ -35,7 +35,9 @@ configuration, run `uv run thrpt --config /path/to/config.yaml`.
 before any other check, so an excluded strategy appears in no plot, table or warning, and a
 malformed row of it does not stop a run. A listed key the ledger lacks is ignored; a ledger spelling
 that resolves to the key (for example `2null ` or `2NULL`) is excluded too. Anything other than a list of
-nonempty strings fails naming the setting, before any output. The repository's `config.yaml` excludes
+nonempty strings fails naming the setting, before any output. A row with too many fields still stops a
+run, because the ledger reader checks that before it knows any strategy. If excluding leaves a benchmark
+with no rows, the command stops with `No throughput results for benchmark(s)`. The repository's `config.yaml` excludes
 `2null` (S2_0); the ledger keeps its rows, and the other strategies keep their values.
 Speedup accepts the same settings with `uv run speedup --config /path/to/config.yaml`;
 no additional YAML settings are required. Its reference is fixed to `base` at one
@@ -86,6 +88,12 @@ in `jvm_args` differ by design and are ignored, but a thread flag that contradic
 Different thread counts are never combined into one mean. Unknown strategy identifiers
 remain visible with a warning. Labels, order and colour keys use canonical
 strategy identifiers (trimmed lowercase, with a final `.0` removed), not labels.
+
+## Plot samples
+
+`plot_samples/` holds example PNGs from a 3-rerun ledger, with no tables or ledger. They are not thesis
+results. Older compare folders keep the legend wording of their time, and `preview_gc_time` is a preview
+that `uv run gc` does not produce.
 
 ## Output names
 
