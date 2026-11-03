@@ -5,14 +5,14 @@ import numpy as np
 import pandas as pd
 
 from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
-                    AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
-                    output_stem, rerun_part, save_figure, strategy_order, t_interval, warn)
+                    AVERAGE_PART, FIELLER_METHOD, fieller_interval, file_names, load_ledger, normalize_throughput, output_directory,
+                    output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, run_tag, t_interval, warn, warn_incomplete)
 
 
 def prepare(frame, config):
     """Pair with base at one thread; aggregate as a ratio of mean scores."""
     observations = normalize_throughput(frame, config.benchmarks, config.labels,
-                                       include_bounds=False)
+                                       include_bounds=False, exclude=config.exclude)
     keys = ["benchmark_short", "rerun"]
     base = observations[observations["strategy"].eq("base") &
                         observations["threads_blobshuffle"].eq(1)]
@@ -20,10 +20,18 @@ def prepare(frame, config):
     missing = required.merge(base[keys], on=keys, how="left", indicator=True)
     missing = missing[missing["_merge"].eq("left_only")]
     if not missing.empty:
-        raise ValueError(f"Missing base at one thread for benchmark/rerun: {missing[keys].to_dict('records')}")
+        details = []
+        for record in missing[keys].to_dict("records"):
+            rows = observations[observations["benchmark_short"].eq(record["benchmark_short"])
+                                & observations["rerun"].eq(record["rerun"])]
+            details.append(f"{record['benchmark_short']}/{run_tag('base', 1, record['rerun'])}/thrpt missing "
+                           f"(ledger row {int(rows['source_row'].iloc[0])} is in that rerun)")
+        raise ValueError("Speedup needs base at one thread in every rerun: " + "; ".join(details))
     invalid = base[base["score"].le(0)]
     if not invalid.empty:
-        raise ValueError(f"Baseline score must be positive for benchmark/rerun: {invalid[keys].to_dict('records')}")
+        details = [f"{r['benchmark_short']}/{run_tag('base', 1, r['rerun'])}/thrpt (ledger row {int(r['source_row'])})"
+                   for _, r in invalid.iterrows()]
+        raise ValueError("Baseline score must be positive: " + "; ".join(details))
     # Keep source fields only; unused throughput intervals are not ratio bounds.
     bound_columns = {"score_confidence_low", "score_confidence_high", "score_error"}
     observations = observations.drop(columns=list(bound_columns & set(observations.columns)))
@@ -50,7 +58,8 @@ def prepare(frame, config):
     ):
         count, total = len(group), int(totals[benchmark])
         if count < total:
-            warn(f"Incomplete coverage: {benchmark}/{strategy}/threads={threads}: {count}/{total} reruns")
+            warn_incomplete(benchmark, strategy, threads, group,
+                            observations.loc[observations["benchmark_short"].eq(benchmark), "rerun"])
         # Divide before summing to avoid overflowing an otherwise finite mean.
         mean_score = (group["score"] / count).sum()
         mean_baseline = (group["baseline_score"] / count).sum()
@@ -59,14 +68,21 @@ def prepare(frame, config):
         if not np.isfinite(speedup):
             raise ValueError(f"Nonfinite speedup at ledger row(s) {group['source_row'].astype(int).tolist()}")
         ci = {name: np.nan for name in ("ci_low", "ci_high", "t_low", "t_high",
-                                        "ci_method", "ci_resamples", "ci_seed")}
+                                        "fieller_low", "fieller_high", "ci_method", "ci_resamples", "ci_seed")}
         ci["ci_seed"] = pd.NA  # Seeds exceed 2**53, so a float column would round them.
         ratios = group["speedup"].to_numpy()
+        ordered = group.sort_values("rerun", kind="stable")  # CI only: independent of ledger row order
         if has_spread(ratios):
             seed = cell_seed(benchmark, strategy, threads, "speedup")
             ci["ci_low"], ci["ci_high"] = bootstrap_ci(
-                group["score"].to_numpy(), group["baseline_score"].to_numpy(), seed=seed)
+                ordered["score"].to_numpy(), ordered["baseline_score"].to_numpy(), seed=seed)
             ci["t_low"], ci["t_high"] = t_interval(ratios)
+            bounds = fieller_interval(ordered["score"].to_numpy(), ordered["baseline_score"].to_numpy())
+            if bounds is None:
+                warn(f"No Fieller interval for {benchmark}/{strategy}/threads={threads}: "
+                     "the base mean cannot be told apart from zero or the interval is unbounded")
+            else:
+                ci["fieller_low"], ci["fieller_high"] = bounds
             ci.update(ci_method=CI_METHOD, ci_resamples=BOOTSTRAP_RESAMPLES, ci_seed=seed)
         elif not (strategy == "base" and threads == 1):
             warn(f"No CI for {benchmark}/{strategy}/threads={threads}: fewer than two reruns or no spread")
@@ -90,7 +106,7 @@ def prepare(frame, config):
 
 
 def render(table, config, title, *, strategies=None, threads=None):
-    """Render prepared dimensionless ratios; across-reruns lines carry the resampled CI."""
+    """Render prepared dimensionless ratios; across-reruns lines carry the paired Fieller interval."""
     import matplotlib
 
     if not config.show:
@@ -110,23 +126,20 @@ def render(table, config, title, *, strategies=None, threads=None):
                 color=config.colors.get(strategy, palette(i % 10)),
                 label=config.labels.get(strategy, strategy), zorder=3)
         if aggregate:
-            ok = data["ci_low"].notna() & data["ci_high"].notna()
+            ok = data["fieller_low"].notna() & data["fieller_high"].notna()
             if ok.any():
                 valid = data[ok]
-                ax.errorbar(valid.index, valid["speedup"],
-                            yerr=np.vstack([valid["speedup"] - valid["ci_low"],
-                                            valid["ci_high"] - valid["speedup"]]),
-                            fmt="none", ecolor=config.colors.get(strategy, palette(i % 10)),
-                            elinewidth=1.5, capsize=4, zorder=3)
-            for n, row in data.iterrows():
-                if pd.notna(row["speedup"]):
-                    ax.annotate(f"n={int(row['n_reruns'])}/{int(row['total_reruns'])}",
-                                (n, row["speedup"]), xytext=(0, 5),
-                                textcoords="offset points", ha="center", fontsize=7)
+                # Never negative, whatever rounding does to a bound that sits on the point.
+                lower = np.maximum(valid["speedup"] - valid["fieller_low"], 0)
+                upper = np.maximum(valid["fieller_high"] - valid["speedup"], 0)
+                ax.errorbar(valid.index, valid["speedup"], yerr=np.vstack([lower, upper]),
+                            fmt="none", ecolor="#222", elinewidth=1.2, capsize=3,
+                            capthick=1.2, zorder=6)
     ax.set_xticks(threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel("Speedup vs. Base N=1 (dimensionless)")
-    ax.set_title(f"{title}\nError bars: {CI_METHOD}" if aggregate else title)
+    drawn = aggregate and (table["fieller_low"].notna() & table["fieller_high"].notna()).any()
+    ax.set_title(f"{title}\nError bars: {FIELLER_METHOD}" if drawn else title)
     ax.set_ylim(bottom=0)
     ax.margins(y=0.15)
     ax.grid(axis="y", color="#ddd", zorder=0)
@@ -141,7 +154,7 @@ def run(config):
     observations, averages = prepare(load_ledger(config.ledger, config.delimiter), config)
     benchmark_names = file_names(config.benchmarks, "benchmark")
     rerun_names = file_names(observations["rerun"].unique(), "rerun")
-    directory = output_directory(config.output)
+    directory = output_directory(config.output, "speedup")
     paths = []
     for benchmark in config.benchmarks:
         data = observations[observations["benchmark_short"].eq(benchmark)]
@@ -149,11 +162,11 @@ def run(config):
         order, threads = strategy_order(data, config), sorted(data["threads_blobshuffle"].unique())
         tables = [(rerun_part(rerun_names[rerun]), f"{benchmark} — speedup, rerun {rerun}", group)
                   for rerun, group in data.groupby("rerun", sort=False)]
-        tables.append((AVERAGE_PART, f"{benchmark} — average speedup across all reruns", summary))
+        tables.append((AVERAGE_PART, f"{benchmark} — speedup, mean of reruns", summary))
         for suffix, title, table in tables:
             stem = directory / output_stem("speedup", benchmark_names[benchmark], suffix)
             csv_path = stem.with_suffix(".csv")
-            table.to_csv(csv_path, index=False)
+            sorted_for_csv(table, config).to_csv(csv_path, index=False)
             paths.append(csv_path)
             fig = render(table, config, title, strategies=order, threads=threads)
             import matplotlib.pyplot as plt

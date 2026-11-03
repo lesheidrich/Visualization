@@ -1,6 +1,7 @@
 """Hand-calculated speedup regressions; the draft is not a test oracle."""
 from dataclasses import replace
 import json
+from pathlib import Path
 import warnings
 
 import matplotlib.pyplot as plt
@@ -93,7 +94,7 @@ def test_all_reruns_and_separate_threads(config, count, expected):
 
 def test_missing_numerator_warns_and_uses_available_ratios(config):
     rows = pair_fixture().to_dict("records") + [observation(rerun="third", score=100)]
-    with pytest.warns(UserWarning, match="2/3 reruns"):
+    with pytest.warns(UserWarning, match="/thrpt missing"):
         individual, summary = prepare(pd.DataFrame(rows), config)
     row = summary[summary.strategy.eq("1a")].iloc[0]
     assert row.speedup == 1.6666666666666667  # 250 / 150; base 900 of "third" must not count
@@ -103,8 +104,8 @@ def test_missing_numerator_warns_and_uses_available_ratios(config):
 
 
 @pytest.mark.parametrize("rows,match", [
-    ([observation("1a", "unpaired", 2, 100)], "Missing base.*unpaired"),
-    ([observation(score=0)], "Baseline score must be positive.*01"),
+    ([observation("1a", "unpaired", 2, 100)], "base_n01_runpaired/thrpt missing"),
+    ([observation(score=0)], "Baseline score must be positive.*base_n01_r01"),
     ([observation(score=-1)], "score must be nonnegative.*mb1_rawNoFinalize.*01"),
     ([observation(), observation()], "Duplicate throughput observations.*mb1_rawNoFinalize.*01"),
     ([observation(score=1e-300), observation("1a", score=1e300)], "Nonfinite speedup"),
@@ -147,9 +148,11 @@ def test_speedup_ignores_optional_bounds_without_warnings(config):
     frame["score_confidence_high"] = "not-an-interval"
     frame["score_error"] = "unused"
     with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
         _, summary = prepare(frame, config)
     assert summary[summary.strategy.eq("1a")].speedup.iloc[0] == 1.6666666666666667  # 250 / 150
-    assert not seen
+    # Only the Fieller warning (two reruns, base 100 and 200); nothing about the ledger bounds.
+    assert len(seen) == 1 and str(seen[0].message).startswith("No Fieller interval for ")
 
 
 def test_line_coordinates_gaps_references_and_labels(config):
@@ -170,7 +173,7 @@ def test_line_coordinates_gaps_references_and_labels(config):
         assert list(lines) == ["Ideal (y=N)", "Base N=1", "Base", "S1_A", "S2_A"]
         assert ax.get_ylim()[0] == 0
         assert "dimensionless" in ax.get_ylabel()
-        assert all(text.get_text() == "n=1/1" for text in ax.texts)
+        assert not ax.texts  # n counts sit under the tick labels, not on the lines.
         assert not [s for c in ax.collections if hasattr(c, "get_segments")
                     for s in c.get_segments() if np.isfinite(s).all()]  # One rerun per cell: no CI, no bars.
     finally:
@@ -181,7 +184,7 @@ def test_unknown_strategy_and_colors_stable_across_reruns(config):
     rows = [observation(), observation("new", score=100), observation(rerun="B"),
             observation("1a", "B", score=100), observation("new", "B", score=100)]
     with pytest.warns(UserWarning, match="Unknown strategies"):
-        with pytest.warns(UserWarning, match="Incomplete coverage"):
+        with pytest.warns(UserWarning, match="/thrpt missing"):
             observations, _ = prepare(pd.DataFrame(rows), config)
     from src.utils import strategy_order
     order = strategy_order(observations, config)
@@ -216,11 +219,13 @@ def test_exports_and_figure_lifecycle(config, formats):
 
 def test_invalid_pairing_creates_no_output(config):
     pd.DataFrame([observation("1a")]).to_csv(config.ledger, index=False)
-    with pytest.raises(ValueError, match="Missing base"):
+    with pytest.raises(ValueError, match="thrpt missing"):
         run(config)
     assert not config.output.exists()
 
 
+@pytest.mark.skipif(not (Path(__file__).parents[1] / "docs" / "jmh_sample.csv").exists(),
+                    reason="docs/jmh_sample.csv is gitignored and absent from this clone")
 def test_supplied_synthetic_ledger_supports_both_features():
     from pathlib import Path
     from src.config import load_config
@@ -231,8 +236,10 @@ def test_supplied_synthetic_ledger_supports_both_features():
     frame = load_ledger(config.ledger, config.delimiter)
     individual, average = prepare(frame, config)
     throughput, throughput_average = prepare_throughput(frame, config)
-    assert len(individual) == len(throughput) == 820
-    assert len(average) == len(throughput_average) == 82
+    # 820 sample rows minus the 100 of 2null (2 benchmarks x 5 thread counts x 10 reruns), which config.yaml excludes.
+    assert len(individual) == len(throughput) == 720
+    assert len(average) == len(throughput_average) == 72
+    assert "2null" not in set(individual.strategy)
     assert set(individual.benchmark_short) == {"mb1_rawNoFinalize", "mb2_rawFinalize"}
     assert average.n_reruns.eq(10).all() and average.total_reruns.eq(10).all()
     assert individual[individual.strategy.eq("base")].speedup.eq(1).all()
@@ -243,3 +250,42 @@ def test_supplied_synthetic_ledger_supports_both_features():
     assert by_benchmark["mb1_rawNoFinalize"] == pytest.approx(3.094952301886, rel=1e-10)
     assert by_benchmark["mb2_rawFinalize"] == pytest.approx(3.094952301886363, rel=1e-10)
     assert individual.run_id.str.startswith("SYNTHETIC-").all()
+
+
+def _aggregate_render(config, rows, threads):
+    _, summary = prepare(pd.DataFrame(rows), config)
+    return render(summary, config, "mb1 — speedup, mean of reruns", threads=threads)
+
+
+def _two_reruns(strategy, threads, score):
+    return [observation(strategy, rerun, threads=threads, score=score + int(rerun == "B") * 10)
+            for rerun in ("A", "B")]
+
+
+def test_aggregate_speedup_errorbars_are_dark_thin_capped_and_on_top(config):
+    rows = _two_reruns("base", 1, 100) + _two_reruns("1a", 1, 100) + _two_reruns("1a", 2, 150)
+    fig = _aggregate_render(config, rows, [1, 2])
+    try:
+        ax = fig.axes[0]
+        bars = [c for c in ax.collections if hasattr(c, "get_segments") and len(c.get_segments())]
+        assert bars and all(c.get_linewidth()[0] == 1.2 for c in bars)
+        assert all(c.get_zorder() > max(line.get_zorder() for line in ax.lines
+                                                       if line.get_marker() != "_") for c in bars)
+        caps = [line for line in ax.lines if line.get_marker() == "_"]
+        assert caps and all(line.get_markeredgewidth() == 1.2 for line in caps)
+        assert "mean of reruns" in ax.get_title() and "average" not in ax.get_title().lower()
+    finally:
+        plt.close(fig)
+
+
+def test_plot_has_no_n_labels_and_partial_coverage_still_warns(config):
+    rows = (_two_reruns("base", 1, 100) + _two_reruns("1a", 1, 100) + _two_reruns("1a", 2, 150)
+            + _two_reruns("2a", 2, 150)[:1])
+    with pytest.warns(UserWarning, match="/thrpt missing"):
+        fig = _aggregate_render(config, rows, [1, 2])
+    try:
+        labels = [t.get_text() for t in fig.axes[0].get_xticklabels()]
+        assert labels == ["1", "2"]
+        assert not fig.axes[0].texts
+    finally:
+        plt.close(fig)

@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 from src import gc_metrics, speedup, thrpt, utils
-from src.config import load_config
+from conftest import gc_observation
+from src.config import Config, load_config
 from src.utils import file_names, output_directory, output_stem, rerun_part, safe_name
 
 ROOT = Path(__file__).parents[1]
@@ -79,34 +80,52 @@ def test_file_names_refuses_a_shared_name(first, second):
     assert repr(first) in str(caught.value) and repr(second) in str(caught.value)
 
 
-def test_folder_is_named_to_the_second(tmp_path, monkeypatch):
+def test_folder_is_named_to_the_second_and_feature(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "datetime", FrozenClock(at(47)))
-    directory = output_directory(tmp_path)
-    assert directory == tmp_path / "2026-11-01_14-50-47"
+    directory = output_directory(tmp_path, "thrpt")
+    assert directory == tmp_path / "2026-11-01_14-50-47_thrpt"
     assert directory.is_dir()
 
 
-def test_same_second_waits_and_leaves_the_existing_folder_alone(tmp_path, monkeypatch):
-    existing = tmp_path / "2026-11-01_14-50-47"
+def test_same_feature_in_the_same_second_waits_and_leaves_the_existing_folder_alone(tmp_path, monkeypatch):
+    existing = tmp_path / "2026-11-01_14-50-47_speedup"
     existing.mkdir()
     (existing / "keep.csv").write_text("kept")
     monkeypatch.setattr(utils, "datetime", FrozenClock(at(47), at(47), at(48)))
     sleeps = []
     monkeypatch.setattr(utils.time, "sleep", sleeps.append)
-    directory = output_directory(tmp_path)
-    assert directory == tmp_path / "2026-11-01_14-50-48"
+    directory = output_directory(tmp_path, "speedup")
+    assert directory == tmp_path / "2026-11-01_14-50-48_speedup"
     assert sleeps == [0.05, 0.05]
     assert (existing / "keep.csv").read_text() == "kept"
     assert list(directory.iterdir()) == []
 
 
+def test_different_features_in_the_same_second_do_not_wait(tmp_path, monkeypatch):
+    existing = tmp_path / "2026-11-01_14-50-47_thrpt"
+    existing.mkdir()
+    monkeypatch.setattr(utils, "datetime", FrozenClock(at(47)))
+    sleeps = []
+    monkeypatch.setattr(utils.time, "sleep", sleeps.append)
+    directory = output_directory(tmp_path, "gc_pauses")
+    assert directory == tmp_path / "2026-11-01_14-50-47_gc_pauses"
+    assert sleeps == []
+    assert existing.is_dir()
+
+
 def test_folder_parents_are_created(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "datetime", FrozenClock(at(1)))
-    assert output_directory(tmp_path / "a" / "b") == tmp_path / "a" / "b" / "2026-11-01_14-50-01"
+    assert (output_directory(tmp_path / "a" / "b", "thrpt")
+            == tmp_path / "a" / "b" / "2026-11-01_14-50-01_thrpt")
+
+
+SAMPLE = ROOT / "docs" / "jmh_sample.csv"
 
 
 @pytest.fixture(scope="module")
 def sample_outputs(tmp_path_factory):
+    if not SAMPLE.exists():
+        pytest.skip("docs/jmh_sample.csv is gitignored and absent from this clone")
     config = load_config(ROOT / "config.yaml")
     output = tmp_path_factory.mktemp("sample")
     config = replace(config, output=output)
@@ -136,7 +155,8 @@ def test_gc_names_on_the_real_sample(sample_outputs):
     for benchmark in BENCHMARKS:
         expected |= {f"gc_{benchmark}_{part}.csv" for part in
                      ["r_all", "avg", "pauses_max_median"] + [f"{m}_pivot" for m in GC_PIVOTS]}
-        expected.add(f"gc_{benchmark}_pauses_max.png")
+        expected |= {f"gc_{benchmark}_pauses_max.png", f"gc_{benchmark}_gc_alloc_rate_norm.png"}
+    expected.add("gc_mb2_rawFinalize_batch_fill.png")
     assert {p.name for p in sample_outputs["gc_metrics"]} == expected
 
 
@@ -144,33 +164,44 @@ def test_gc_names_on_the_real_sample(sample_outputs):
 def test_every_feature_uses_a_short_folder_and_no_digest(sample_outputs):
     for paths in sample_outputs.values():
         assert len({p.parent for p in paths}) == 1
-        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}", paths[0].parent.name)
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(thrpt|speedup|gc_pauses)", paths[0].parent.name)
         assert all(p.is_file() and p.stat().st_size > 0 for p in paths)
         assert not any(re.search(r"[0-9a-f]{16}", p.name) for p in paths)
         assert not any("average" in p.name or "rerun" in p.name for p in paths)
 
 
+def literal_ledger(path, benchmarks, reruns=("01", "02")):
+    """Small valid ledger (base at one thread plus 1a at two) with GC columns, for all three features."""
+    rows = [gc_observation(benchmark_short=benchmark, strategy=strategy, rerun=rerun, threads=threads,
+                           score=score + 10 * k)
+            for benchmark in benchmarks
+            for k, rerun in enumerate(reruns)
+            for strategy, threads, score in (("base", 1, 100), ("1a", 2, 150))]
+    pd.DataFrame(rows).rename(columns={"strategy": ""}).to_csv(path, index=False)
+    return path
+
+
 @pytest.mark.parametrize("feature", [thrpt, speedup, gc_metrics])
 def test_colliding_benchmarks_stop_before_any_output(feature, tmp_path):
-    config = load_config(ROOT / "config.yaml")
-    config = replace(config, output=tmp_path / "out", benchmarks=("mb1_rawNoFinalize", "mb1.rawNoFinalize"))
-    frame = feature.load_ledger(config.ledger, config.delimiter)
-    twin = frame[frame["benchmark_short"].eq("mb1_rawNoFinalize")].assign(benchmark_short="mb1.rawNoFinalize")
-    ledger = tmp_path / "ledger.csv"
-    pd.concat([frame, twin]).rename(columns={"strategy": ""}).to_csv(ledger, index=False)
+    benchmarks = ("mb1_rawNoFinalize", "mb1.rawNoFinalize")
+    config = Config(literal_ledger(tmp_path / "ledger.csv", benchmarks), tmp_path / "out", benchmarks=benchmarks)
     with pytest.raises(ValueError, match="would share the file name"):
-        feature.run(replace(config, ledger=ledger))
+        feature.run(config)
     assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize("feature", [thrpt, speedup])
 def test_colliding_reruns_stop_before_any_output(feature, tmp_path):
-    config = load_config(ROOT / "config.yaml")
-    config = replace(config, output=tmp_path / "out")
-    frame = feature.load_ledger(config.ledger, config.delimiter)
-    frame["rerun"] = frame["rerun"].replace({"01": "a/1", "02": "a?1"})
-    ledger = tmp_path / "ledger.csv"
-    frame.rename(columns={"strategy": ""}).to_csv(ledger, index=False)
+    ledger = literal_ledger(tmp_path / "ledger.csv", ("mb1_rawNoFinalize",), reruns=("a/1", "a?1"))
+    config = Config(ledger, tmp_path / "out", benchmarks=("mb1_rawNoFinalize",))
     with pytest.raises(ValueError, match="'a/1' and 'a\\?1'"):
-        feature.run(replace(config, ledger=ledger))
+        feature.run(config)
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("feature, name", [(thrpt, "thrpt"), (speedup, "speedup"), (gc_metrics, "gc_pauses")])
+def test_each_command_writes_to_its_named_folder(sample_outputs, feature, name):
+    paths = sample_outputs[feature.__name__.split(".")[-1]]
+    assert paths
+    assert {p.parent for p in paths if p.is_file()} == {paths[0].parent}
+    assert re.fullmatch(rf"\d{{4}}-\d{{2}}-\d{{2}}_\d{{2}}-\d{{2}}-\d{{2}}_{name}", paths[0].parent.name)

@@ -41,7 +41,7 @@ def test_installed_help_table_and_option_ownership_without_config(tmp_path):
         else:
             assert command.startswith("   ")  # Cell padding plus option indentation.
             sections[current].append((command.strip(), description.strip()))
-    for name in ("thrpt", "speedup"):
+    for name in (n for n in manifest["project"]["scripts"] if n != "help"):
         assert sections[f"uv run {name}"] == [
             ("-h, --help", "show this help message and exit"),
             ("--config PATH", "YAML configuration path (default: config.yaml)"),

@@ -18,6 +18,14 @@ def observation(strategy="base", rerun="01", threads=1, score=100, **extra):
             "score_confidence_high": str(float(score) * 1.1), "score_unit": "ops/s", **extra}
 
 
+@pytest.fixture(autouse=True)
+def _close_figures():
+    """No test may leak a figure into a test that counts open figures."""
+    yield
+    import matplotlib.pyplot as plt
+    plt.close("all")
+
+
 @pytest.fixture
 def config(tmp_path):
     return Config(tmp_path / "ledger.csv", tmp_path / "out",

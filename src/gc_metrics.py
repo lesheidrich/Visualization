@@ -1,4 +1,4 @@
-"""GC, pause and batch-fill table and pauses_max dot plot: preparation, averages, pivots, CSV and figure export."""
+"""GC, pause and batch-fill table, pauses_max dot plot, gc_alloc_rate_norm bar plot and, for mb2_rawFinalize only, batch_fill bar plot: preparation, averages, pivots, CSV and figure export."""
 import json
 import re
 
@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import LogFormatter
 
-from .utils import (ALL_RERUNS_PART, AVERAGE_PART, duration_seconds, file_names, load_ledger,
+from .utils import (ALL_RERUNS_PART, AVERAGE_PART, T_METHOD, bootstrap_ci,
+                    cell_seed, duration_seconds, file_names, has_spread, load_ledger, t_interval,
                     normalize_throughput, numeric, output_directory, output_stem, save_figure,
-                    strategy_order, warn)
+                    sorted_for_csv, strategy_order, warn, warn_incomplete)
 
 PIVOT_METRICS = ("gc_alloc_rate_norm", "gc_count", "gc_time", "gc_time_pct",
                  "pauses_max", "pauses_p99", "batch_fill")
@@ -31,6 +32,12 @@ LEADING = ("benchmark_short", "strategy", "strategy_original", "threads_blobshuf
 BLANK_EFFECT = {"gc_time": "; gc_time_pct missing",
                 "aux_recordBytes": "; batch_bytes and batch_fill missing",
                 "aux_batches": "; batch_bytes and batch_fill missing"}
+ALLOC = "gc_alloc_rate_norm"
+ALLOC_CI = (f"{ALLOC}_ci_low", f"{ALLOC}_ci_high")
+ALLOC_T = (f"{ALLOC}_t_low", f"{ALLOC}_t_high")
+FILL = "batch_fill"
+FILL_T = (f"{FILL}_t_low", f"{FILL}_t_high")
+BATCH_FILL_BENCHMARK = "mb2_rawFinalize"
 AUX_UNITS = (re.compile(r"bytes/(ns|us|ms|s)"), re.compile(r"batches/(ns|us|ms|s)"))
 
 
@@ -96,7 +103,10 @@ def prepare(frame, config):
     if missing:
         raise ValueError(f"Missing ledger column(s): {sorted(missing)}")
     observations = normalize_throughput(frame, config.benchmarks, config.labels,
-                                        include_bounds=False)
+                                        include_bounds=False, exclude=config.exclude)
+    # Left in the ledger's unit, so they don't belong beside a score in ops/s.
+    observations = observations.drop(columns=[c for c in ("score_error", "score_confidence_low", "score_confidence_high")
+                                              if c in observations])
     _parse_metrics(observations)
     _parse_settings(observations)
     _check_aux_units(observations)
@@ -108,8 +118,15 @@ def prepare(frame, config):
     if over.any():
         warn(f"gc_time_pct above 100 % at ledger row(s) {_rows(observations, over)}")
     zero = observations["aux_batches"].eq(0)
-    if zero.any():
-        warn(f"Zero aux_batches at ledger row(s) {_rows(observations, zero)}; "
+    known = observations["aux_batches"].notna()  # A blank has its own warning.
+    all_zero = {b for b, z in zero[known].groupby(observations.loc[known, "benchmark_short"]) if z.all()}
+    # NoFinalize benchmarks close no batch by design, so all zeros say nothing is wrong there.
+    expected = {b for b in all_zero if "NoFinalize" in b}
+    for benchmark in sorted(all_zero - expected):
+        warn(f"{benchmark}: aux_batches is 0 on every row; batch_bytes and batch_fill are blank")
+    partial = zero & ~observations["benchmark_short"].isin(all_zero)
+    if partial.any():
+        warn(f"Zero aux_batches at ledger row(s) {_rows(observations, partial)}; "
              "batch_bytes and batch_fill missing")
     with np.errstate(divide="ignore", invalid="ignore"):
         observations["batch_bytes"] = (observations["aux_recordBytes"]
@@ -129,24 +146,47 @@ def prepare(frame, config):
         count, total = len(group), int(totals[benchmark])
         name = f"{benchmark}/{strategy}/threads={threads}"
         if count < total:
-            warn(f"Incomplete coverage: {name}: {count}/{total} reruns")
+            warn_incomplete(benchmark, strategy, threads, group,
+                            observations.loc[observations["benchmark_short"].eq(benchmark), "rerun"])
         record = {"benchmark_short": benchmark, "strategy": strategy, "threads_blobshuffle": threads}
         for metric in AVERAGED:
             if group[metric].notna().all():
                 record[metric] = group[metric].mean()
+            elif benchmark in all_zero and metric in ("batch_bytes", "batch_fill") and group["aux_batches"].eq(0).all():
+                record[metric] = np.nan
             else:
                 record[metric] = np.nan
-                warn(f"Average {metric} missing for {name}: a contributor lacks {metric}")
+                warn(f"Mean of reruns of {metric} missing for {name}: a contributor lacks {metric}")
         record.update({
             "n_reruns": count, "total_reruns": total,
             "contributing_reruns": json.dumps(group["rerun"].tolist()),
             "source_rows": json.dumps(group["source_row"].astype(int).tolist()),
             "source_files": json.dumps(group["source_file"].unique().tolist()) if "source_file" in group else "[]",
             "original_strategies": json.dumps(group["strategy_original"].unique().tolist()),
-            "summary_kind": "arithmetic average across reruns",
+            "summary_kind": "mean of reruns",
         })
+        record[ALLOC_CI[0]], record[ALLOC_CI[1]] = _alloc_ci(group, name, benchmark, strategy, threads)
+        ordered = group.sort_values("rerun", kind="stable")  # t interval only: independent of row order
+        for metric in AVERAGED:
+            values = ordered[metric].to_numpy(dtype=float)
+            low = high = np.nan
+            if not np.isnan(values).any() and has_spread(values):
+                low, high = t_interval(values)
+            record[f"{metric}_t_low"], record[f"{metric}_t_high"] = low, high
         records.append(record)
     return observations, pd.DataFrame.from_records(records)
+
+
+def _alloc_ci(group, name, benchmark, strategy, threads):
+    """Resampled CI of one group's per-rerun gc_alloc_rate_norm, or (nan, nan) with a warning."""
+    values = group.sort_values("rerun", kind="stable")[ALLOC].to_numpy(dtype=float)  # CI only
+    if np.isnan(values).any():
+        warn(f"No {ALLOC} CI for {name}: a contributor lacks {ALLOC}")
+    elif not has_spread(values):
+        warn(f"No {ALLOC} CI for {name}: fewer than two reruns or no spread")
+    else:
+        return bootstrap_ci(values, seed=cell_seed(benchmark, strategy, threads, ALLOC))
+    return np.nan, np.nan
 
 
 def pivots(averages, config):
@@ -186,6 +226,17 @@ def pause_medians(observations):
         "n_reruns", "total_reruns", "contributing_reruns"])
 
 
+def _compact_slots(strategies, threads, present, width):
+    """x position of each (strategy, threads) slot: only strategies in `present` take a slot,
+    centred on the thread group."""
+    slots = {}
+    for i, n in enumerate(threads):
+        here = [s for s in strategies if present(s, n)]
+        for j, s in enumerate(here):
+            slots[(s, n)] = i + (j - (len(here) - 1) / 2) * width
+    return slots
+
+
 class _PlainLogFormatter(LogFormatter):
     """Log tick labels as plain numbers (no scientific or mathtext notation)."""
 
@@ -208,12 +259,10 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
     palette = matplotlib.colormaps["tab10"]
     plottable = observations[observations["pauses_max"] > 0]
     # Compact slots: per thread group only strategies with plottable values take a slot.
-    slots = {}
-    for i, n in enumerate(threads):
-        present = [s for s in strategies
-                   if (plottable["strategy"].eq(s) & plottable["threads_blobshuffle"].eq(n)).any()]
-        for j, s in enumerate(present):
-            slots[(s, n)] = i + (j - (len(present) - 1) / 2) * width
+    slots = _compact_slots(
+        strategies, threads,
+        lambda s, n: (plottable["strategy"].eq(s) & plottable["threads_blobshuffle"].eq(n)).any(),
+        width)
     handles = []
     for k, strategy in enumerate(strategies):
         data = plottable[plottable["strategy"].eq(strategy)]
@@ -243,13 +292,85 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
     return fig
 
 
+def _render_bars(averages, config, *, strategies, threads, metric, t_columns, title, ylabel,
+                 min_top=None):
+    """Bars of the mean of reruns of `metric` with t interval error bars from `t_columns`.
+
+    `min_top` raises the automatic axis top to at least that value; the bottom is always 0."""
+    import matplotlib
+
+    if not config.show:
+        matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=config.figsize)
+    width = 0.8 / len(strategies)
+    palette = matplotlib.colormaps["tab10"]
+    known = averages[averages[metric].notna()]
+    slots = _compact_slots(
+        strategies, threads,
+        lambda s, n: (known["strategy"].eq(s) & known["threads_blobshuffle"].eq(n)).any(), width)
+    bars = 0
+    for k, strategy in enumerate(strategies):
+        data = known[known["strategy"].eq(strategy)].sort_values("threads_blobshuffle")
+        if data.empty:
+            continue
+        x = np.array([slots[(strategy, n)] for n in data["threads_blobshuffle"]])
+        ax.bar(x, data[metric], width=width, color=config.colors.get(strategy, palette(k % 10)),
+               edgecolor="white", label=config.labels.get(strategy, strategy), zorder=2)
+        complete = (data[t_columns[0]].notna() & data[t_columns[1]].notna()).to_numpy()
+        if complete.any():
+            valid = data[complete]
+            err = np.vstack([valid[metric] - valid[t_columns[0]], valid[t_columns[1]] - valid[metric]])
+            ax.errorbar(x[complete], valid[metric], yerr=err, fmt="none", color="#444",
+                        elinewidth=1.5, capsize=4, zorder=3)
+            bars += int(complete.sum())
+    ax.set_xticks(np.arange(len(threads)), threads)
+    ax.set_xlabel("BlobShuffle threads")
+    ax.set_ylabel(ylabel)
+    ax.set_title(f"{title}\nError bars: {T_METHOD}" if bars else title)
+    ax.margins(y=0.05)
+    ax.set_yscale("linear")
+    ax.set_ylim(bottom=0)
+    if min_top is not None:
+        ax.set_ylim(top=max(min_top, ax.get_ylim()[1]))
+    ax.grid(axis="y", color="#ddd", zorder=0)
+    ax.spines[["top", "right"]].set_visible(False)
+    if ax.patches:
+        ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
+    fig.tight_layout()
+    return fig
+
+
+def render_alloc(averages, config, benchmark, *, strategies, threads):
+    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with 95% t interval error bars."""
+    return _render_bars(averages, config, strategies=strategies, threads=threads, metric=ALLOC,
+                        t_columns=ALLOC_T, ylabel=f"{ALLOC} (B/op)",
+                        title=f"{benchmark} \u2014 {ALLOC}, mean of reruns")
+
+
+def render_batch_fill(averages, config, benchmark, *, strategies, threads):
+    """Bars of the mean of reruns of batch_fill, axis from 0 to at least 1, with 95% t interval error bars."""
+    return _render_bars(averages, config, strategies=strategies, threads=threads, metric=FILL,
+                        t_columns=FILL_T, min_top=1, ylabel=f"{FILL} (batch_bytes / cfg_batchDesiredBytes)",
+                        title=f"{benchmark} \u2014 {FILL}, mean of reruns")
+
+
+def warn_batch_fill_without_interval(averages, benchmark):
+    """One warning per group with a batch_fill mean but no t interval (plot step only)."""
+    for _, row in averages[averages["benchmark_short"].eq(benchmark)].iterrows():
+        if pd.notna(row[FILL]) and (pd.isna(row[FILL_T[0]]) or pd.isna(row[FILL_T[1]])):
+            warn(f"No {FILL} t interval for {benchmark}/{row['strategy']}/"
+                 f"threads={row['threads_blobshuffle']}: fewer than two reruns or no spread")
+
+
 def run(config):
     """Validate all requested results before creating output files."""
     observations, averages = prepare(load_ledger(config.ledger, config.delimiter), config)
     tables = pivots(averages, config)
     medians = pause_medians(observations)
     benchmark_names = file_names(config.benchmarks, "benchmark")
-    directory = output_directory(config.output)
+    directory = output_directory(config.output, "gc_pauses")
     paths = []
     for benchmark in config.benchmarks:
         name = benchmark_names[benchmark]
@@ -263,7 +384,7 @@ def run(config):
         benchmark_medians = medians[medians["benchmark_short"].eq(benchmark)]
         outputs.append((f"{stem('pauses_max_median')}.csv", benchmark_medians, False))
         for filename, table, index in outputs:
-            table.to_csv(directory / filename, index=index)
+            (table if index else sorted_for_csv(table, config)).to_csv(directory / filename, index=index)
             paths.append(directory / filename)
         fig = render_pauses(data, benchmark_medians, config,
                             f"{benchmark} \u2014 pauses_max, one dot per rerun",
@@ -277,4 +398,25 @@ def run(config):
                 plt.show()
         finally:
             plt.close(fig)
+        fig = render_alloc(averages[averages["benchmark_short"].eq(benchmark)], config, benchmark,
+                           strategies=strategy_order(data, config),
+                           threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))
+        try:
+            paths.extend(save_figure(fig, directory / stem(ALLOC), config))
+            if config.show:
+                plt.show()
+        finally:
+            plt.close(fig)
+        bench_averages = averages[averages["benchmark_short"].eq(benchmark)]
+        if benchmark == BATCH_FILL_BENCHMARK and bench_averages[FILL].notna().any():
+            warn_batch_fill_without_interval(bench_averages, benchmark)
+            fig = render_batch_fill(bench_averages, config, benchmark,
+                                    strategies=strategy_order(data, config),
+                                    threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))
+            try:
+                paths.extend(save_figure(fig, directory / stem(FILL), config))
+                if config.show:
+                    plt.show()
+            finally:
+                plt.close(fig)
     return paths

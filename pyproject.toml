@@ -9,6 +9,7 @@ dependencies = ["matplotlib>=3.8", "numpy>=1.26", "pandas>=2.2", "pyyaml>=6.0"]
 thrpt = "src.cli:main"
 speedup = "src.cli:speedup_main"
 gc = "src.cli:gc_main"
+compare = "src.cli:compare_main"
 help = "src.cli:help_main"
 
 [dependency-groups]

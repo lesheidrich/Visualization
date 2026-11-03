@@ -23,6 +23,8 @@ def quiet_prepare(rows, config):
     """Run prepare and fail on any UserWarning (the input is meant to be clean)."""
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
+        # The new alloc-CI warning is intended for these one-rerun inputs; every other warning still fails.
+        warnings.filterwarnings("ignore", message=r"No gc_alloc_rate_norm CI for ", category=UserWarning)
         return prepare(pd.DataFrame(rows), config)
 
 
@@ -191,11 +193,12 @@ def test_batch_bytes(config, record, record_unit, batches, batches_unit, expecte
 
 
 @pytest.mark.parametrize("record", ["1000", "0"])
-def test_zero_batches_leave_both_missing_with_a_warning(config, record):
+def test_zero_batches_on_no_finalize_leave_both_missing_without_a_warning(config, record):
     rows = [gc_observation(aux_recordBytes=record, aux_batches="0")]
-    with pytest.warns(UserWarning) as seen:
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
         observations, averages = prepare(pd.DataFrame(rows), config)
-    assert "Zero aux_batches at ledger row(s) [2]; batch_bytes and batch_fill missing" in warned(seen)
+    assert not any("batch" in str(w.message) for w in seen)  # NoFinalize closes no batch by design.
     assert pd.isna(observations["batch_bytes"].iloc[0]) and pd.isna(observations["batch_fill"].iloc[0])
     assert pd.isna(averages["batch_bytes"].iloc[0]) and pd.isna(averages["batch_fill"].iloc[0])
     # The rest of the row is kept.
@@ -392,7 +395,7 @@ def test_missing_contributor_blanks_only_its_metric_average(config, blank):
     average = averages.iloc[0]
     for metric in MISSING[blank]:
         assert pd.isna(average[metric]), metric
-        assert f"Average {metric} missing for {BENCH}/base/threads=1: a contributor lacks {metric}" in text
+        assert f"Mean of reruns of {metric} missing for {BENCH}/base/threads=1: a contributor lacks {metric}" in text
     for metric, expected in SURVIVING[blank].items():
         assert average[metric] == pytest.approx(expected, **APPROX), metric
     # Per-rerun values of the other contributors stay present.
@@ -433,9 +436,9 @@ def test_coverage_fields(config, reruns, present):
     assert sorted(json.loads(group["contributing_reruns"])) == sorted(present)
     assert all(isinstance(r, str) for r in json.loads(group["contributing_reruns"]))
     if expected_count < len(reruns):
-        assert f"Incomplete coverage: {BENCH}/1a/threads=4: {expected_count}/{len(reruns)} reruns" in text
+        assert all(f"{BENCH}/1a_n04_r{r}/thrpt missing." in text for r in set(reruns) - set(present))
     else:
-        assert "Incomplete coverage" not in text
+        assert "/thrpt missing" not in text
     full = averages[averages["strategy"].eq("base")].iloc[0]
     assert full["n_reruns"] == full["total_reruns"] == len(reruns)
     assert sorted(json.loads(full["contributing_reruns"])) == sorted(reruns)
@@ -456,7 +459,7 @@ def test_average_provenance_lists(config):
     assert json.loads(average["source_rows"]) == [2, 3]
     assert json.loads(average["source_files"]) == []                        # no source_file column
     assert sorted(json.loads(average["original_strategies"])) == ["1A", "1a"]  # stripped originals
-    assert average["summary_kind"] == "arithmetic average across reruns"
+    assert average["summary_kind"] == "mean of reruns"
 
 
 def test_source_file_is_listed_when_present(config):
@@ -483,7 +486,9 @@ def test_observation_columns_and_order(config):
         "n_reruns", "total_reruns", "contributing_reruns", "source_row", "source_file"]
     assert averages.columns.tolist() == [
         "benchmark_short", "strategy", "threads_blobshuffle", *AVERAGED, "n_reruns", "total_reruns",
-        "contributing_reruns", "source_rows", "source_files", "original_strategies", "summary_kind"]
+        "contributing_reruns", "source_rows", "source_files", "original_strategies", "summary_kind",
+        "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high",
+        *[f"{m}_t_{e}" for m in AVERAGED for e in ("low", "high")]]
 
 
 # ---------------------------------------------------------------- pivots

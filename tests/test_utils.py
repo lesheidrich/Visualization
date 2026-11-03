@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import pytest
 
@@ -89,10 +91,67 @@ def test_comparison_settings_and_provenance(config):
         prepare(pd.DataFrame(rows), config)
 
 
+def _jvm(*flags):
+    return json.dumps(["-Xms4g", "-Dbench.partitions=64", *flags])
+
+
+@pytest.mark.parametrize("spacing", [",", ", "])
+def test_jvm_args_flags_that_vary_by_design_do_not_stop_the_command(config, spacing):
+    rows = [observation(strategy="2a", threads_blobshuffle="1", jvm_args=_jvm("-Dbench.threads=1")),
+            observation(strategy="2a", threads_blobshuffle="8", jvm_args=_jvm("-Dbench.threads=8")),
+            observation(strategy="1c", threads_blobshuffle="8",
+                        jvm_args=_jvm("-Dbench.threads=8", "-Dbench.partitionBufferBytes=2097152")
+                        .replace(", ", spacing))]
+    assert len(prepare(pd.DataFrame(rows), config)[1]) == 3
+
+
+@pytest.mark.parametrize("other", ["-Xmx8g", "-Dbench.partitionsX=1", "-Dbench.threadsX=1"])
+def test_jvm_args_other_differences_still_stop_the_command(config, other):
+    rows = [observation(strategy="2a", jvm_args=_jvm("-Dbench.threads=1")),
+            observation(strategy="2b", jvm_args=_jvm("-Dbench.threads=1", other))]
+    with pytest.raises(ValueError, match="Incompatible settings.*jvm_args"):
+        prepare(pd.DataFrame(rows), config)
+
+
+def test_thread_flag_must_match_threads_blobshuffle(config):
+    rows = [observation(threads_blobshuffle="1", jvm_args=_jvm("-Dbench.threads=2"))]
+    with pytest.raises(ValueError, match="-Dbench.threads differs from threads_blobshuffle"):
+        prepare(pd.DataFrame(rows), config)
+
+
+def test_partition_buffer_must_be_constant_within_a_strategy(config):
+    rows = [observation(strategy="1c", rerun="A", jvm_args=_jvm("-Dbench.partitionBufferBytes=1")),
+            observation(strategy="1c", rerun="B", jvm_args=_jvm("-Dbench.partitionBufferBytes=2"))]
+    with pytest.raises(ValueError, match=r"partitionBufferBytes differs within strategy \['1c'\]"):
+        prepare(pd.DataFrame(rows), config)
+
+
+def test_partition_buffer_on_only_some_reruns_of_a_strategy_stops_the_command(config):
+    rows = [observation(strategy="1c", rerun="A", jvm_args=_jvm("-Dbench.partitionBufferBytes=1")),
+            observation(strategy="1c", rerun="B", jvm_args=_jvm())]
+    with pytest.raises(ValueError, match="Incompatible settings"):
+        prepare(pd.DataFrame(rows), config)
+
+
+def test_jvm_args_that_are_not_a_list_compare_as_text(config):
+    rows = [observation(strategy="2a", jvm_args="-Xmx4g"), observation(strategy="2b", jvm_args="-Xmx4g")]
+    assert len(prepare(pd.DataFrame(rows), config)[1]) == 2
+    rows[1]["jvm_args"] = "-Xmx8g"
+    with pytest.raises(ValueError, match="Incompatible settings.*jvm_args"):
+        prepare(pd.DataFrame(rows), config)
+
+
 def test_missing_column(config, ledger):
     with pytest.raises(ValueError, match="Missing ledger column.*score_unit"):
         prepare(ledger.drop(columns="score_unit"), config)
 
 
 def test_unique_output_names(tmp_path):
-    assert output_directory(tmp_path) != output_directory(tmp_path)
+    assert output_directory(tmp_path, "thrpt") != output_directory(tmp_path, "thrpt")
+
+
+def test_threads_jmh_is_not_checked_for_comparability(config):
+    rows = [observation(threads_jmh="1"), observation(rerun="B", threads_jmh="8")]
+    assert len(prepare(pd.DataFrame(rows), config)[1]) == 1
+    rows[1]["threads_jmh"] = "not a number"
+    assert len(prepare(pd.DataFrame(rows), config)[1]) == 1

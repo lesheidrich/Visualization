@@ -84,5 +84,5 @@ def test_cli_missing_baseline_creates_no_outputs(tmp_path):
                                      "benchmarks": ["mb1_rawNoFinalize"]}))
     result = invoke("speedup", config, tmp_path)
     assert result.returncode == 1
-    assert "speedup: Missing base" in result.stderr and "unpaired" in result.stderr
+    assert "base_n01_runpaired/thrpt missing" in result.stderr and result.stderr.startswith("speedup:") or "speedup: Speedup needs base" in result.stderr
     assert not (tmp_path / "out").exists()

@@ -23,7 +23,7 @@ def test_numerical_regression(config):
     assert result["ci_high"].tolist() == [200, 600]
     assert result["n_reruns"].tolist() == [2, 2]
     assert json.loads(result["contributing_reruns"].iloc[0]) == ["01", "02"]
-    assert result["interval_kind"].unique().tolist() == ["95% percentile bootstrap of reruns"]
+    assert result["interval_kind"].unique().tolist() == ["95% t interval of reruns"]
 
 
 @pytest.mark.parametrize("count", [1, 3, 10])
@@ -60,7 +60,7 @@ def test_missing_bound_columns(config, ledger):
 
 def test_incomplete_coverage(config):
     frame = pd.DataFrame([observation(), observation(rerun="B"), observation(strategy="1a", score=200)])
-    with pytest.warns(UserWarning, match="Incomplete coverage"):
+    with pytest.warns(UserWarning, match="/thrpt missing"):
         _, result = prepare(frame, config)
     missing = result[result["strategy"].eq("1a")].iloc[0]
     assert missing["n_reruns"] == 1 and missing["total_reruns"] == 2
@@ -79,7 +79,7 @@ def test_plot_uses_prepared_values_bounds_labels_and_missing_positions(config):
     frame = load_ledger(Path(__file__).parent / "fixtures/throughput.csv")
     _, averages = prepare(frame, config)
     config = replace(config, colors={"base": "red", "1a": "blue"})
-    fig = render(averages, config, "Average", strategies=["base", "1a"], threads=[1, 2])
+    fig = render(averages, config, "mb1 — mean of reruns", strategies=["base", "1a"], threads=[1, 2])
     try:
         ax = fig.axes[0]
         assert [bar.get_height() for bar in ax.patches] == [150, 500]
@@ -87,11 +87,14 @@ def test_plot_uses_prepared_values_bounds_labels_and_missing_positions(config):
         assert [text.get_text() for text in ax.get_xticklabels()] == ["1", "2"]
         assert ax.get_xlabel() == "BlobShuffle threads"
         assert ax.get_ylabel() == "Throughput (ops/s)"
-        assert "Error bars: 95% percentile bootstrap of reruns" in ax.get_title()
+        assert "Error bars: 95% t interval of reruns" in ax.get_title()
+        assert "mean of reruns" in ax.get_title() and "average" not in ax.get_title().lower()
+        assert not ax.texts  # No n labels on the plot.
         assert ax.get_ylim()[0] == 0
         assert [text.get_text() for text in ax.get_legend().get_texts()] == ["Base", "S1_A"]
         segments = [segment for collection in ax.collections for segment in collection.get_segments()]
-        np.testing.assert_allclose([segment[:, 1] for segment in segments], [[100, 200], [400, 600]])  # ci_low, ci_high
+        np.testing.assert_allclose([segment[:, 1] for segment in segments], [[-485.3102, 785.3102], [-770.6205, 1770.6205]],
+                               atol=1e-3)  # t_low, t_high: 150 -/+ 12.7062 * 70.7107 / sqrt(2), 500 -/+ 12.7062 * 141.4214 / sqrt(2)
         np.testing.assert_allclose([bar.get_x() + bar.get_width() / 2 for bar in ax.patches], [-0.2, 1.2])
         assert len(ax.patches) == 2  # No zero-filled bars for the absent combinations.
     finally:
