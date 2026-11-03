@@ -190,6 +190,7 @@ def test_spec_four_thread_counts_legend_levels(tmp_path):
     labels = legend_labels(fig)
     assert "97.5% interval (equivalence test)" in labels and "98.75% interval (difference test)" in labels
     assert labels[1:3] == ["97.5% interval (equivalence test)", "98.75% interval (difference test)"]
+    assert [line.get_linewidth() for line in fig.axes[0].get_legend().get_lines()][1:3] == [6, 1.5]  # thick, thin
 
 
 def test_spec_five_thread_counts_legend_levels(tmp_path):
@@ -243,8 +244,9 @@ def test_spec_verdicts_stay_in_the_table(tmp_path):
     assert table["verdict"].iloc[0] == "equivalent" and table["note"].iloc[0] != ""
     assert list(fig.axes[0].texts) == [] and list(fig.texts) == []
     everything = " ".join(t.get_text() for t in fig.findobj(Text))
-    for word in ("equivalent ", "faster", "inconclusive", "below margin", "dirty_build", "work_differs"):
-        assert word not in everything.replace("(equivalence test)", "")
+    for word in ("equivalent ", "faster", "inconclusive", "no spread observed", "below margin", "dirty_build",
+                 "work_differs"):
+        assert word not in everything
 
 
 # ---- integration / feature --------------------------------------------------------------------------
