@@ -386,7 +386,9 @@ def test_sample_ledger_says_no_spread_everywhere(tmp_path):
                                       "comparison": {"margin": 0.05}}))
     result = invoke("compare", config, tmp_path)
     assert result.returncode == 0, result.stderr
-    for line in result.stdout.splitlines():
+    lines = result.stdout.splitlines()
+    assert sum(line.endswith(".csv") for line in lines) == 2
+    for line in lines:
         if not line.endswith(".csv"):
             continue
         t = pd.read_csv(line)

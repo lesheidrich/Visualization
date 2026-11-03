@@ -40,6 +40,8 @@ If the data are too noisy, the answer is "inconclusive". That is an honest answe
 
 `uv run compare` writes one table per benchmark. It also saves one plot per benchmark, `compare_<benchmark>_ratio`, drawn from the same table. Per thread count the plot shows one dot at `logt_ratio`, a thick bar for the equivalence interval, a thin bar for the difference interval, a line at 1, and (with a margin) lines at 1 + margin and 1 / (1 + margin). The plot adds no numbers: the verdict, the note and the flags stay in the table.
 
+Read equivalence from the thick bar against the dashed lines, and a difference from the thin bar against the solid line. A thin bar may cross a dashed line in a row that is equivalent. Do not say "98% confident of equivalence" (section 5).
+
 ## 2. Pairing
 
 One rerun is one complete sweep of all configurations. We have 10 reruns. Each rerun measures 2A and 2B.

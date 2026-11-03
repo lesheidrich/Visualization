@@ -298,8 +298,8 @@ def run(config):
             paths.append(path)
             paths.extend(save_figure(figures[benchmark], directory / output_stem(FEATURE, names[benchmark], "ratio"),
                                      config))
-            if config.show:
-                plt.show()
+        if config.show:
+            plt.show()      # After every save: a window blocks until it is closed.
     finally:
         for fig in figures.values():
             plt.close(fig)

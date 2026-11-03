@@ -7,6 +7,7 @@ values for other rows (k = 2: 2.016068, 2.004656 to 2.027546, 2.002928 to 2.0292
 With four thread counts alpha = 0.05 / 4 = 0.0125: levels 0.9875 (thin bar) and 0.975 (thick bar).
 """
 from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
@@ -270,12 +271,43 @@ def test_feature_failure_leaves_no_output_folder(tmp_path, capsys):
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
 
 
+def test_feature_render_failure_leaves_no_output_folder(tmp_path, capsys, monkeypatch):
+    def boom(*a, **k):
+        raise ValueError("cannot draw")
+    monkeypatch.setattr(compare, "render_ratio", boom)
+    cfg = write_run(tmp_path, ledger(five()), margin=0.05)
+    code, printed, _, err = run_main(cli.compare_main, cfg, capsys)
+    assert code == 1 and printed == [] and "cannot draw" in err
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
+
+
+def test_unit_axis_holds_both_margin_lines_when_the_data_sit_close_to_one(tmp_path):
+    fig, _ = draw(ledger(five()), tmp_path, margin=0.05)
+    low, high = fig.axes[0].get_ylim()
+    assert low < 1 / 1.05 and high > 1.05   # the bars span only 1.0015 to 1.0146
+
+
 def test_feature_figures_are_closed_after_the_run(tmp_path, capsys):
     run_command(tmp_path, capsys, ledger(five()), margin=0.05)
     assert plt.get_fignums() == []
 
 
-def test_feature_show_is_called_once_per_benchmark(tmp_path, capsys, monkeypatch):
+def test_feature_show_comes_once_after_every_benchmark_is_saved(tmp_path, capsys, monkeypatch):
+    other = "mb2_rawFinalize"
+    saved_at_show = []
+    monkeypatch.setattr(plt, "show", lambda *a, **k: saved_at_show.append(
+        sorted(p.name for p in next((tmp_path / "out").iterdir()).iterdir())))
+    cfg = write_run(tmp_path, ledger(five()) + ledger(five(), benchmark=other), benchmarks=(BENCH, other), margin=0.05)
+    import yaml
+    data = yaml.safe_load(cfg.read_text())
+    data["plot"]["show"] = True
+    cfg.write_text(yaml.safe_dump(data))
+    code, *_ = run_main(cli.compare_main, cfg, capsys)
+    assert code == 0 and saved_at_show == [[f"compare_{BENCH}_avg.csv", f"compare_{BENCH}_ratio.png",
+                                            f"compare_{other}_avg.csv", f"compare_{other}_ratio.png"]]
+
+
+def test_feature_show_is_called_once_with_one_benchmark(tmp_path, capsys, monkeypatch):
     shown = []
     monkeypatch.setattr(plt, "show", lambda *a, **k: shown.append(1))
     cfg = write_run(tmp_path, ledger(five()), margin=0.05)
@@ -302,11 +334,11 @@ def test_feature_raw3_ledger_plots_both_benchmarks(tmp_path, capsys):
 # ---- README and help text -----------------------------------------------------------------------------
 
 def test_readme_and_help_describe_the_plot():
-    readme = (ROOT / "README.md").read_text()
+    readme = re.sub(r"\s+", " ", (ROOT / "README.md").read_text())
     assert "| `compare_mb1_rawNoFinalize_ratio.png` |" in readme
     assert "It draws no plot" not in readme
     assert "`compare_<benchmark>_ratio.<fmt>`" in readme
-    for text in ("thick bar is the equivalence interval", "thin bar is the\ndifference interval",
+    for text in ("thick bar is the equivalence interval", "thin bar is the difference interval",
                  "`2A / 2B throughput ratio`", "`geometric mean of per-rerun ratios`",
                  "1 + margin and 1 / (1 + margin)"):
         assert text in readme

@@ -1,4 +1,4 @@
-> Owner decisions of 2026-11-01 override this report: paired log-t decides (no Fieller), no Cohen's d, no primary benchmark, no plot. See `openspec/changes/archive/2026-11-02-add-2a-2b-comparison/design.md`.
+> Owner decisions of 2026-11-01 override this report: paired log-t decides (no Fieller), no Cohen's d, no primary benchmark, and at that time no plot. The owner added a ratio plot on 2026-11-03 (`add-compare-plot`). See `openspec/changes/archive/2026-11-02-add-2a-2b-comparison/design.md`.
 
 # 2A vs 2B comparison
 
