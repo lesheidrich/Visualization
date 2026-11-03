@@ -50,7 +50,8 @@ One row per benchmark, strategy, thread count and rerun, plus the mean of reruns
 | `gc_time_pct` | `thrpt` | ✓ | X | Yes |
 | `pauses_max` (ms) | `thrpt` | ✓ | ✓ | No: one dot per rerun plus a median line |
 | `pauses_p99` (ms) | `thrpt` | ✓ | X | Owner decision: stays in the GC table, not plotted |
-| `batch_bytes`, `batch_fill` | `thrpt` | ✓ | X | Yes |
+| `batch_fill` | `thrpt` | ✓ | ✓ | Yes: `add-batch-fill-plot`, `mb2_rawFinalize` only. Bars are the mean of reruns on a linear axis from zero, with its top at the larger of 1 and the automatic top. Error bars are the 95% t interval, in the `_avg` CSV as `batch_fill_t_low` and `_t_high`. |
+| `batch_bytes` | `thrpt` | ✓ | X | Yes |
 | `stdev_agg_forks` | `thrpt` | X | X | Plot form not decided |
 | Tail latency (`p50`, `p95`, `p99`) | `sample` | X | X | Plot form not decided |
 

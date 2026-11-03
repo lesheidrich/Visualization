@@ -97,12 +97,14 @@ def make_config(tmp_path, ledger, **changes):
 def execute(config):
     """Run the command and load every written CSV: bench -> reruns / average / pivots."""
     paths = run(config)
-    assert len(paths) == (10 + 2 * len(config.formats)) * len(config.benchmarks)  # 10 CSVs + two figures per format
+    assert len(paths) == ((10 + 2 * len(config.formats)) * len(config.benchmarks)  # 10 CSVs + two figures per format
+                          + len(config.formats) * ("mb2_rawFinalize" in config.benchmarks))  # batch fill, mb2 only
     tables = {}
     for bench in config.benchmarks:
         stem = f"gc_{bench}_"
         mine = {p.name[len(stem):]: p for p in paths if p.name.startswith(stem)}
-        assert len(mine) == 10 + 2 * len(config.formats), sorted(mine)  # 10 CSVs + two figures per format
+        assert len(mine) == 10 + 2 * len(config.formats) + len(config.formats) * (bench == "mb2_rawFinalize"), \
+            sorted(mine)  # 10 CSVs + two figures per format, plus batch fill for mb2
         tables[bench] = {
             "reruns": pd.read_csv(mine["r_all.csv"], dtype={"rerun": str, "strategy": str}),
             "average": pd.read_csv(mine["avg.csv"], dtype={"strategy": str}),

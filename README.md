@@ -95,6 +95,7 @@ exists, the run waits for the next free second, so it never overwrites anything.
 | `gc_mb1_rawNoFinalize_r_all.csv` | GC metrics, one row per strategy, thread count and rerun |
 | `gc_mb1_rawNoFinalize_gc_time_pivot.csv` | GC time, strategy by thread count |
 | `gc_mb1_rawNoFinalize_gc_alloc_rate_norm.png` | gc_alloc_rate_norm, mean of reruns |
+| `gc_mb2_rawFinalize_batch_fill.png` | batch_fill, mean of reruns (mb2_rawFinalize only) |
 
 Unsafe characters in a benchmark or rerun name become underscores. If two names would then
 match, ignoring case, the command stops with an error before writing anything.
@@ -217,8 +218,7 @@ execution-order, warm-up, profiler-overhead, or drift checks.
 `uv run gc [--config PATH]` tabulates GC, pause and batch-fill metrics from the
 `thrpt` rows of the requested benchmarks. It uses the same row selection and
 checks as `thrpt` (benchmark filter, strategy keys, thread counts, duplicate
-and settings-compatibility checks) and writes CSVs plus one figure per benchmark
-(see below; the figure honours `output.formats`). Each invocation gets a new directory with, per
+and settings-compatibility checks) and writes CSVs plus figures (see below; the figures honour `output.formats`). Each invocation gets a new directory with, per
 benchmark: `gc_<benchmark>_r_all.csv` (one row per strategy, thread count and
 rerun, with every calculation input and the source row/file),
 `gc_<benchmark>_avg.csv`, and `gc_<benchmark>_<metric>_pivot.csv` (strategy
@@ -264,7 +264,8 @@ mean `pauses_max` is the **mean of the per-rerun maxima**, not a maximum;
 use the per-rerun CSV for the worst case. Every averaged metric has a 95% t interval of the
 rerun values in `<metric>_t_low` and `<metric>_t_high` (the last columns of the `_avg` CSV);
 a group with fewer than two reruns, no spread, or a blank contributor has them blank, with no
-extra warning. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
+extra warning from the table. The `batch_fill` plot of `mb2_rawFinalize` warns for a group that has a
+mean but no t interval. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
 checks), in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high`: 10,000 resamples, seeded per
 benchmark, strategy and thread count as for throughput; there a blank value comes with a warning
 naming the group. The pivots hold the means only.
@@ -297,6 +298,21 @@ blank; the title says `95% t interval of reruns` on a second line. A lower bound
 true in the CSV and the axis still starts at 0. A
 strategy with no mean at a thread count has no bar there, and the strategies present
 are centred in that group, as on the pauses_max plot. There are no per-rerun allocation plots.
+
+### batch_fill bar plot
+
+For `mb2_rawFinalize` only, from its `thrpt` rows, `gc` also writes
+`gc_mb2_rawFinalize_batch_fill.<fmt>` (one file per format in `output.formats`). It is drawn
+like the `gc_alloc_rate_norm` plot: bars are the mean of reruns on a linear y-axis from zero,
+whose top is the larger of 1 and the automatic top. The y-axis label is
+`batch_fill (batch_bytes / cfg_batchDesiredBytes)`. Error bars are the 95% t interval from
+`batch_fill_t_low` and `batch_fill_t_high` in the `_avg` CSV; the title says
+`95% t interval of reruns` when any is drawn. An upper bound above 1 stays true: it is not
+clamped and is fully visible, and a lower bound below zero stays in the CSV while the axis starts
+at 0. A group with a mean but no t interval (fewer than two reruns, or no spread) has a bar, no
+error bar and one warning naming it; a group without a mean has no bar and no such warning. No
+other benchmark gets this plot, `mb1_rawNoFinalize` included. If `mb2_rawFinalize` is not
+requested or has no `batch_fill` mean, no file is written. The plot has no notes.
 
 ## 2A vs 2B comparison
 

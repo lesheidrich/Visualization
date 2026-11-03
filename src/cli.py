@@ -5,7 +5,7 @@ import sys
 COMMANDS = {
     "thrpt": "Plot throughput for every rerun and the mean of reruns.",
     "speedup": "Plot same-rerun baseline speedup and the ratio of means across reruns.",
-    "gc": "Tabulate GC, pause and batch-fill metrics per rerun and as mean of reruns; plot pauses_max per rerun and gc_alloc_rate_norm as mean of reruns.",
+    "gc": "Tabulate GC, pause and batch-fill metrics per rerun and as mean of reruns; plot pauses_max per rerun, gc_alloc_rate_norm as mean of reruns and batch_fill as mean of reruns for mb2_rawFinalize.",
     "compare": "Tabulate the paired 2A vs 2B comparison with an equivalence verdict per thread count.",
     "help": "List project commands and their options.",
 }

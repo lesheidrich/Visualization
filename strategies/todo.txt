@@ -6,7 +6,7 @@ TODO (written 2026-11-02)
 │ Tail latency          │ You said later. It gets its own table and plot from the sample rows. docs/ledger_all │
 │                       │ .xlsx now has real sample rows to try it on                                          │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ batch_fill plot       │ Your notes list it (lines 9 and 155), but it's only in the table so far              │
+│ batch_fill plot       │ Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot)                        │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
 │ gc_count and gc_time  │ Your notes list them (line 10), but they're only in the table so far                 │
 │ plots                 │                                                                                      │
@@ -30,8 +30,8 @@ Ideas from research_questions.txt. Not built. Nobody has decided whether to buil
     docs/ledger_all.xlsx has real sample rows (one rerun). Still to pick: which percentiles.
     Do not put bars on a log axis. Notes line 113 proposes that.
 
-[ ] batch_fill plot
-    Notes lines 9 and 155. Only in the table so far.
+[x] batch_fill plot
+    Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot).
 
 [ ] gc_count and gc_time plots
     Notes line 10. Only in the table so far.

@@ -657,17 +657,18 @@ def test_two_benchmarks_give_twenty_csvs_and_two_pngs_in_contract_order(config):
     write_ledger(config, small_fixture() + ledger_rows(
         [("base", 1, "r1", 3), ("base", 1, "r2", 5), ("1a", 1, "r1", 2), ("1a", 1, "r2", 4)], benchmark=BENCH2))
     paths = run(config)
-    assert len(paths) == 24 and len(set(paths)) == 24
+    assert len(paths) == 25 and len(set(paths)) == 25
     expected = []
     for benchmark in (BENCH, BENCH2):
         expected += ([output_name(benchmark, s) for s in OLD_SUFFIXES]
                      + [output_name(benchmark, "pauses_max_median.csv"),
                         output_name(benchmark, "pauses_max.png"),
-                        output_name(benchmark, "gc_alloc_rate_norm.png")])
+                        output_name(benchmark, "gc_alloc_rate_norm.png")]
+                     + ([output_name(benchmark, "batch_fill.png")] if benchmark == BENCH2 else []))
     assert [p.name for p in paths] == expected
     assert sum(p.suffix == ".csv" for p in paths) == 20
-    assert sum(p.suffix == ".png" for p in paths) == 4
-    second = pd.read_csv(paths[-3])
+    assert sum(p.suffix == ".png" for p in paths) == 5
+    second = pd.read_csv(paths[-4])
     assert second["pauses_max_median"].tolist() == [4.0, 3.0]     # base (3 + 5) / 2; 1a (2 + 4) / 2
     assert plt.get_fignums() == []
 

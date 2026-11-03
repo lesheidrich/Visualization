@@ -1,4 +1,4 @@
-"""GC, pause and batch-fill table, pauses_max dot plot and gc_alloc_rate_norm bar plot: preparation, averages, pivots, CSV and figure export."""
+"""GC, pause and batch-fill table, pauses_max dot plot, gc_alloc_rate_norm bar plot and, for mb2_rawFinalize only, batch_fill bar plot: preparation, averages, pivots, CSV and figure export."""
 import json
 import re
 
@@ -35,6 +35,9 @@ BLANK_EFFECT = {"gc_time": "; gc_time_pct missing",
 ALLOC = "gc_alloc_rate_norm"
 ALLOC_CI = (f"{ALLOC}_ci_low", f"{ALLOC}_ci_high")
 ALLOC_T = (f"{ALLOC}_t_low", f"{ALLOC}_t_high")
+FILL = "batch_fill"
+FILL_T = (f"{FILL}_t_low", f"{FILL}_t_high")
+BATCH_FILL_BENCHMARK = "mb2_rawFinalize"
 AUX_UNITS = (re.compile(r"bytes/(ns|us|ms|s)"), re.compile(r"batches/(ns|us|ms|s)"))
 
 
@@ -289,8 +292,11 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
     return fig
 
 
-def render_alloc(averages, config, benchmark, *, strategies, threads):
-    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with 95% t interval error bars."""
+def _render_bars(averages, config, *, strategies, threads, metric, t_columns, title, ylabel,
+                 min_top=None):
+    """Bars of the mean of reruns of `metric` with t interval error bars from `t_columns`.
+
+    `min_top` raises the automatic axis top to at least that value; the bottom is always 0."""
     import matplotlib
 
     if not config.show:
@@ -300,7 +306,7 @@ def render_alloc(averages, config, benchmark, *, strategies, threads):
     fig, ax = plt.subplots(figsize=config.figsize)
     width = 0.8 / len(strategies)
     palette = matplotlib.colormaps["tab10"]
-    known = averages[averages[ALLOC].notna()]
+    known = averages[averages[metric].notna()]
     slots = _compact_slots(
         strategies, threads,
         lambda s, n: (known["strategy"].eq(s) & known["threads_blobshuffle"].eq(n)).any(), width)
@@ -310,29 +316,52 @@ def render_alloc(averages, config, benchmark, *, strategies, threads):
         if data.empty:
             continue
         x = np.array([slots[(strategy, n)] for n in data["threads_blobshuffle"]])
-        ax.bar(x, data[ALLOC], width=width, color=config.colors.get(strategy, palette(k % 10)),
+        ax.bar(x, data[metric], width=width, color=config.colors.get(strategy, palette(k % 10)),
                edgecolor="white", label=config.labels.get(strategy, strategy), zorder=2)
-        complete = (data[ALLOC_T[0]].notna() & data[ALLOC_T[1]].notna()).to_numpy()
+        complete = (data[t_columns[0]].notna() & data[t_columns[1]].notna()).to_numpy()
         if complete.any():
             valid = data[complete]
-            err = np.vstack([valid[ALLOC] - valid[ALLOC_T[0]], valid[ALLOC_T[1]] - valid[ALLOC]])
-            ax.errorbar(x[complete], valid[ALLOC], yerr=err, fmt="none", color="#444",
+            err = np.vstack([valid[metric] - valid[t_columns[0]], valid[t_columns[1]] - valid[metric]])
+            ax.errorbar(x[complete], valid[metric], yerr=err, fmt="none", color="#444",
                         elinewidth=1.5, capsize=4, zorder=3)
             bars += int(complete.sum())
     ax.set_xticks(np.arange(len(threads)), threads)
     ax.set_xlabel("BlobShuffle threads")
-    ax.set_ylabel(f"{ALLOC} (B/op)")
-    title = f"{benchmark} \u2014 {ALLOC}, mean of reruns"
+    ax.set_ylabel(ylabel)
     ax.set_title(f"{title}\nError bars: {T_METHOD}" if bars else title)
     ax.margins(y=0.05)
     ax.set_yscale("linear")
     ax.set_ylim(bottom=0)
+    if min_top is not None:
+        ax.set_ylim(top=max(min_top, ax.get_ylim()[1]))
     ax.grid(axis="y", color="#ddd", zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     if ax.patches:
         ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
     fig.tight_layout()
     return fig
+
+
+def render_alloc(averages, config, benchmark, *, strategies, threads):
+    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with 95% t interval error bars."""
+    return _render_bars(averages, config, strategies=strategies, threads=threads, metric=ALLOC,
+                        t_columns=ALLOC_T, ylabel=f"{ALLOC} (B/op)",
+                        title=f"{benchmark} \u2014 {ALLOC}, mean of reruns")
+
+
+def render_batch_fill(averages, config, benchmark, *, strategies, threads):
+    """Bars of the mean of reruns of batch_fill, axis from 0 to at least 1, with 95% t interval error bars."""
+    return _render_bars(averages, config, strategies=strategies, threads=threads, metric=FILL,
+                        t_columns=FILL_T, min_top=1, ylabel=f"{FILL} (batch_bytes / cfg_batchDesiredBytes)",
+                        title=f"{benchmark} \u2014 {FILL}, mean of reruns")
+
+
+def warn_batch_fill_without_interval(averages, benchmark):
+    """One warning per group with a batch_fill mean but no t interval (plot step only)."""
+    for _, row in averages[averages["benchmark_short"].eq(benchmark)].iterrows():
+        if pd.notna(row[FILL]) and (pd.isna(row[FILL_T[0]]) or pd.isna(row[FILL_T[1]])):
+            warn(f"No {FILL} t interval for {benchmark}/{row['strategy']}/"
+                 f"threads={row['threads_blobshuffle']}: fewer than two reruns or no spread")
 
 
 def run(config):
@@ -378,4 +407,16 @@ def run(config):
                 plt.show()
         finally:
             plt.close(fig)
+        bench_averages = averages[averages["benchmark_short"].eq(benchmark)]
+        if benchmark == BATCH_FILL_BENCHMARK and bench_averages[FILL].notna().any():
+            warn_batch_fill_without_interval(bench_averages, benchmark)
+            fig = render_batch_fill(bench_averages, config, benchmark,
+                                    strategies=strategy_order(data, config),
+                                    threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))
+            try:
+                paths.extend(save_figure(fig, directory / stem(FILL), config))
+                if config.show:
+                    plt.show()
+            finally:
+                plt.close(fig)
     return paths

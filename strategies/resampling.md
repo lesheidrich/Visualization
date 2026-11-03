@@ -150,7 +150,7 @@ Scripts: /tmp/claude-1000/-home-lesheid-workspaces-thesis-visualization/3b802712
 - **`gc_time_pct`:** this is `gc_time` divided by a fixed 250,000 ms, so its interval is the `gc_time` interval rescaled. It is not a binomial proportion, so Wilson-style intervals do not apply.
 - **`gc_count`:** expanded percentile worked even at Poisson(3) in simulation. No Poisson model is needed.
 - **Exception 1, any metric:** if all 10 values are identical, show no CI.
-- **Exception 2, `batch_fill`:** when reruns take only one or two distinct values, show "k of 10 reruns at 1.0" and the range as the main result. An interval can still be computed if there are two values, but do not rely on it.
+- **Exception 2, `batch_fill`:** this no longer matches the plot. The `batch_fill` plot of `mb2_rawFinalize` draws bars of the mean of reruns with the 95% t interval (`batch_fill_t_low`, `batch_fill_t_high`); a group with fewer than two reruns or no spread has a bar, no error bar and a warning. The "k of 10 reruns" display is not drawn.
 - **Exception 3, `pauses_max`:** stays dots plus median, as already decided.
 - **Skew and outliers:** always show the rerun dots. Do not remove outliers unless the fork data shows a specific fault. If the t and expanded endpoints differ by more than about 25% of the half-width, flag the cell. That threshold is my own heuristic.
 

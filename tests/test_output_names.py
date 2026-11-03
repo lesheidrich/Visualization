@@ -156,6 +156,7 @@ def test_gc_names_on_the_real_sample(sample_outputs):
         expected |= {f"gc_{benchmark}_{part}.csv" for part in
                      ["r_all", "avg", "pauses_max_median"] + [f"{m}_pivot" for m in GC_PIVOTS]}
         expected |= {f"gc_{benchmark}_pauses_max.png", f"gc_{benchmark}_gc_alloc_rate_norm.png"}
+    expected.add("gc_mb2_rawFinalize_batch_fill.png")
     assert {p.name for p in sample_outputs["gc_metrics"]} == expected
 
 
