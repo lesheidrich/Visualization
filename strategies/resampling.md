@@ -14,7 +14,7 @@ Decisions made since the report:
 | Speedup single-rerun plots | No error bars |
 | Groups with no spread or fewer than two reruns | No CI, with a warning. Their label says `none`, and a title names error bars only if some are drawn. |
 | `gc_alloc_rate_norm` plot (built, `add-gc-alloc-plot`) | Bars of the mean of reruns, linear axis from zero, no log axis. Error bars are the 95% t interval (`gc_alloc_rate_norm_t_low`, `_t_high`). The plain percentile bootstrap, 10,000 resamples, stays in two other columns of the GC `_avg` CSV, for checks. Rerun values are taken in rerun order, so ledger row order cannot change the CI. |
-| Other GC metrics | Every averaged metric has `<metric>_t_low` and `<metric>_t_high` in the `_avg` CSV (blank without spread or with a blank contributor). No plot draws them. `pauses_max` stays dots plus a median line, and `pauses_p99` stays in the table, not plotted. |
+| Other GC metrics | Every averaged metric has `<metric>_t_low` and `<metric>_t_high` in the `_avg` CSV (blank without spread or with a blank contributor). Only the `gc_alloc_rate_norm` plot and the `batch_fill` plot of `mb2_rawFinalize` draw them. `pauses_max` stays dots plus a median line, and `pauses_p99` stays in the table, not plotted. |
 | 2A vs 2B (built, `add-2a-2b-comparison`) | Paired log-t on per-rerun log(2A/2B), decided by the owner over Fieller. mb1 and mb2 are analysed separately. One verdict per thread count, at 99% and 98%. Cohen's d is dropped: see [notes_for_thesis.md](notes_for_thesis.md). The margin is 5%, set in `config.yaml`. |
 
 **Where this table and the report below differ, this table wins.** The report is kept as written, so it still recommends the expanded percentile, 50,000 resamples and rerun dots, and its thesis wording mentions the expanded percentile. None of those were adopted.
@@ -150,7 +150,7 @@ Scripts: /tmp/claude-1000/-home-lesheid-workspaces-thesis-visualization/3b802712
 - **`gc_time_pct`:** this is `gc_time` divided by a fixed 250,000 ms, so its interval is the `gc_time` interval rescaled. It is not a binomial proportion, so Wilson-style intervals do not apply.
 - **`gc_count`:** expanded percentile worked even at Poisson(3) in simulation. No Poisson model is needed.
 - **Exception 1, any metric:** if all 10 values are identical, show no CI.
-- **Exception 2, `batch_fill`:** this no longer matches the plot. The `batch_fill` plot of `mb2_rawFinalize` draws bars of the mean of reruns with the 95% t interval (`batch_fill_t_low`, `batch_fill_t_high`); a group with fewer than two reruns or no spread has a bar, no error bar and a warning. The "k of 10 reruns" display is not drawn.
+- **Exception 2, `batch_fill`:** (later note, 2026-11-03: the original advice no longer matches the plot.) The `batch_fill` plot of `mb2_rawFinalize` draws bars of the mean of reruns with the 95% t interval (`batch_fill_t_low`, `batch_fill_t_high`); a group with fewer than two reruns or no spread has a bar, no error bar and a warning. The "k of 10 reruns" display is not drawn.
 - **Exception 3, `pauses_max`:** stays dots plus median, as already decided.
 - **Skew and outliers:** always show the rerun dots. Do not remove outliers unless the fork data shows a specific fault. If the t and expanded endpoints differ by more than about 25% of the half-width, flag the cell. That threshold is my own heuristic.
 

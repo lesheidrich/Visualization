@@ -652,7 +652,7 @@ def test_formats_saved_in_configured_order_and_figures_closed(config, formats, m
 
 
 @pytest.mark.filterwarnings("ignore::UserWarning")
-def test_two_benchmarks_give_twenty_csvs_and_two_pngs_in_contract_order(config):
+def test_two_benchmarks_give_every_csv_and_png_in_contract_order(config):
     config = replace(config, benchmarks=(BENCH, BENCH2))
     write_ledger(config, small_fixture() + ledger_rows(
         [("base", 1, "r1", 3), ("base", 1, "r2", 5), ("1a", 1, "r1", 2), ("1a", 1, "r2", 4)], benchmark=BENCH2))

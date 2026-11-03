@@ -16,7 +16,7 @@ What we are building and where each piece stands. There are four features, and a
 |---|---|
 | Rerun value | The one number a rerun gives for a strategy, thread count and metric. |
 | Mean of reruns | The mean of those rerun values. This is the bar height. |
-| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput and `gc_alloc_rate_norm` mean-of-reruns plots. |
+| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput, `gc_alloc_rate_norm` and `batch_fill` (mb2 only) mean-of-reruns plots. |
 | Paired Fieller interval | The t-based interval for a ratio of means that keeps each strategy score with its base score from the same rerun. This is the error bar on speedup mean-of-reruns plots. |
 | Resampled CI | A 95% percentile bootstrap of the rerun values. It stays in the tables for tests and sanity checks and is not drawn. |
 

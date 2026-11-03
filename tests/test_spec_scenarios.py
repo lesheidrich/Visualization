@@ -5,7 +5,6 @@ Expected values are literals with their arithmetic.
 """
 from dataclasses import replace
 import json
-import re
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,8 +16,8 @@ import pytest
 from audit_support import read_csv, run_main, write_run
 from conftest import gc_observation, observation
 from src import compare, gc_metrics, speedup, thrpt, utils
-from src.cli import compare_main, gc_main, main as thrpt_main, speedup_main
-from src.config import Config, load_config
+from src.cli import gc_main, main as thrpt_main, speedup_main
+from src.config import load_config
 from src.utils import load_ledger
 
 

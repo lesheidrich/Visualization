@@ -8,8 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.collections import LineCollection
+from matplotlib.colors import to_rgb
 
-from audit_support import read_csv, run_main, write_run
+from audit_support import run_main, write_run
 from conftest import gc_observation
 from src import cli, gc_metrics
 
@@ -74,6 +75,13 @@ def test_scenario_thrpt_rows_only(tmp_path, monkeypatch, capsys):
     rows = group("base", 1, [0.96, 0.97, 0.98]) + group("base", 1, [0.1, 0.2, 0.3], mode="sample")
     _, _, _, figures, _ = run_gc(tmp_path, monkeypatch, capsys, rows)
     assert bars(figures[STEM]) == [(0, pytest.approx(0.97))]      # (0.96+0.97+0.98)/3, not the sample 0.2
+
+
+def test_scenario_thrpt_rows_only_with_sample_rows_first(tmp_path, monkeypatch, capsys):
+    rows = group("base", 1, [0.1, 0.2, 0.3], mode="sample") + group("base", 1, [0.96, 0.97, 0.98])
+    _, _, _, figures, _ = run_gc(tmp_path, monkeypatch, capsys, rows)
+    assert bars(figures[STEM]) == [(0, pytest.approx(0.97))]
+    assert segments(figures[STEM]) == [pytest.approx((0, 0.94516, 0.99484), abs=1e-5)]
 
 
 def test_scenario_mean_of_reruns(tmp_path, monkeypatch, capsys):
@@ -304,6 +312,8 @@ def test_colours_and_order_follow_configuration(tmp_path, monkeypatch, capsys):
     ax = figures[STEM].axes[0]
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["Base", "S1_A"]     # configured order
     assert bars(figures[STEM]) == [(-0.2, pytest.approx(0.8)), (0.2, pytest.approx(0.9))]   # Base left, S1_A right
+    assert [tuple(np.round(p.get_facecolor()[:3], 6)) for p in ax.patches] == [
+        tuple(np.round(to_rgb(c), 6)) for c in ("C0", "C1")]     # configured palette, in that order
 
 
 def test_one_warning_per_group_even_with_several_formats(tmp_path, monkeypatch, capsys):
@@ -323,15 +333,15 @@ def test_table_step_warns_nothing_about_batch_fill_t(tmp_path):
 
 
 def test_readme_documents_the_batch_fill_plot():
-    text = (Path(__file__).parents[1] / "README.md").read_text()
+    text = re.sub(r"\s+", " ", (Path(__file__).parents[1] / "README.md").read_text())
     assert "gc_mb2_rawFinalize_batch_fill.png" in text
-    section = text.split("### batch_fill bar plot")[1].split("\n## ")[0]
+    section = text.split("### batch_fill bar plot")[1].split(" ## ")[0]
     for part in ("`mb2_rawFinalize` only", "`thrpt` rows", "mean of reruns", "linear y-axis from zero",
                  "larger of 1 and the automatic top", "batch_fill (batch_bytes / cfg_batchDesiredBytes)",
-                 "95% t interval", "not\nclamped", "mb1_rawNoFinalize", "no t interval"):
+                 "95% t interval", "not clamped", "mb1_rawNoFinalize", "no t interval"):
         assert part in section, part
     assert "one figure per benchmark" not in text
-    assert "warns for a group that has a\nmean but no t interval" in text
+    assert "warns for a group that has a mean but no t interval" in text
 
 
 @pytest.mark.skipif(not RAW3.is_file(), reason="docs/raw3.csv is absent")
@@ -350,3 +360,8 @@ def test_raw3_gives_one_mb2_batch_fill_plot(tmp_path, monkeypatch, capsys):
     ax = figures[STEM].axes[0]
     assert ax.get_ylim()[0] == 0 and ax.get_ylim()[1] >= 1 and len(ax.texts) == 0 and len(figures[STEM].texts) == 0
     assert not [m for m in messages if "No batch_fill t interval" in m and MB1 in m]
+    avg = pd.read_csv(next(Path(p) for p in printed if p.endswith(f"gc_{MB2}_avg.csv")))
+    assert sorted(height for _, height in bars(figures[STEM])) == pytest.approx(sorted(avg["batch_fill"]))
+    drawn = sorted(segment[1:] for segment in segments(figures[STEM]))
+    wanted = sorted(zip(avg["batch_fill_t_low"], avg["batch_fill_t_high"]))
+    assert [value for pair in drawn for value in pair] == pytest.approx([value for pair in wanted for value in pair])
