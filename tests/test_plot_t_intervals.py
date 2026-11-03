@@ -17,7 +17,7 @@ from matplotlib.collections import LineCollection
 from conftest import gc_observation, observation
 from src import cli, compare, gc_metrics, speedup, thrpt
 from src.config import Config
-from src.utils import FIELLER_METHOD, T_METHOD, fieller_interval, load_ledger
+from src.utils import FIELLER_METHOD, T_METHOD, fieller_interval
 
 BENCH = "mb1_rawNoFinalize"
 BENCH2 = "mb2_rawFinalize"
@@ -191,9 +191,27 @@ def test_unit_fieller_unbounded_when_base_mean_cannot_be_told_from_zero():
     assert fieller_interval(strategy, base) is None
 
 
+def test_unit_fieller_interval_stays_bounded_and_holds_the_point_with_tiny_ratio_noise():
+    # Scores near 6.4e6 with ratios equal to about 9 significant digits: the plain discriminant
+    # subtracts two nearly equal huge numbers and rounding can make it negative.
+    rng = np.random.default_rng(7)
+    for noise in (2e-9, 1e-8, 1e-6):
+        for _ in range(100):
+            base = rng.normal(6.4e6, 2e5, 10)
+            strategy = 2 * base * (1 + rng.normal(0, noise, 10))
+            bounds = fieller_interval(strategy, base)
+            assert bounds is not None
+            point = strategy.mean() / base.mean()
+            assert bounds[0] <= point <= bounds[1]
+            # Bracket by the exact width: t on the residuals s - point * b, up to the quadratic's
+            # small correction.
+            half = 2.262157 * (strategy - point * base).std(ddof=1) / (10 ** 0.5 * base.mean())
+            assert (bounds[1] - bounds[0]) / 2 == pytest.approx(half, rel=1e-3)
+
+
 def test_unit_fieller_interval_always_contains_the_point_when_bounded():
     # With a positive theta^2 coefficient the quadratic is not above zero at the point, so a bounded
-    # interval exists and holds the ratio of means (the discriminant branch is a defensive guard).
+    # interval exists and holds the ratio of means.
     rng = np.random.default_rng(99)
     for _ in range(300):
         base = rng.normal(100, rng.uniform(1, 30), 10)
@@ -647,7 +665,7 @@ A = [101, 103, 98, 102, 100, 103, 98, 101, 102, 100]
 B = [100, 102, 98, 101, 99, 103, 97, 100, 102, 98]
 
 
-def compare_row(a, b, margin, threads=(1,), thread_count=None):
+def compare_row(a, b, margin, threads=(1,)):
     config = Config(Path("l.csv"), Path("out"), benchmarks=(BENCH,), comparison_margin=margin)
     table, messages = collect(compare.prepare, rows_2a_2b(a, b, threads), config)
     return table[BENCH].iloc[0], messages

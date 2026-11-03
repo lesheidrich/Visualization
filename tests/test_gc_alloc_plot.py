@@ -138,7 +138,7 @@ def literal_rows():
     ])
 
 
-def test_integration_average_gains_exactly_the_two_columns_and_nothing_else_changes(config):
+def test_integration_average_gains_exactly_the_expected_columns_and_nothing_else_changes(config):
     averages, _ = prepared(literal_rows(), config)
     assert averages.columns.tolist() == [
         "benchmark_short", "strategy", "threads_blobshuffle", *gc_metrics.AVERAGED,
@@ -354,7 +354,8 @@ def test_feature_sample_ledger(tmp_path, monkeypatch):
             sorted(round(v, 6) for v in known["gc_alloc_rate_norm"])
         drawn = sorted((round(s[0][1], 6), round(s[1][1], 6)) for s in error_segments(fig))
         csv = sorted((round(a, 6), round(b, 6)) for a, b in
-                     zip(known[CI_LOW].dropna(), known[CI_HIGH].dropna()))
+                     zip(known["gc_alloc_rate_norm_t_low"].dropna(),
+                         known["gc_alloc_rate_norm_t_high"].dropna()))
         assert drawn == csv
 
 

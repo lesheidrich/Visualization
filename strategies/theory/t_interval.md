@@ -42,7 +42,7 @@ Here **n** is the number of reruns. For us n = 10. Now each piece.
 
 Why n − 1? The mean is computed from the same values. That makes the values look a bit closer to the mean than the truth. Dividing by n − 1 instead of n corrects it.
 
-**sd / √n, the standard error.** It is the spread of the *mean*, not of single values. A mean of many values is steadier than one value. With 10 reruns the mean is steadier by a factor of √10 = 3.16. 40 reruns instead of 10 would make the bar 0.447 of its width, a bit more than half, because t shrinks too (from 2.262 to 2.023).
+**sd / √n, the standard error.** It is the spread of the *mean*, not of single values. A mean of many values is steadier than one value. With 10 reruns the mean is steadier by a factor of √10 = 3.16. 40 reruns instead of 10 would make the bar 0.447 of its width, a bit less than half, because t shrinks too (from 2.262 to 2.023).
 
 **t(0.975, n − 1), the multiplier.** It turns the standard error into a 95% bar. Why not the familiar z = 1.96?
 
@@ -164,7 +164,7 @@ The t interval is only as good as these:
 
 1. **Reruns are independent.** One rerun does not influence the next.
 2. **Reruns are alike.** They measure the same thing under the same conditions.
-3. **The mean of 10 reruns is close to normal.** Do not argue "the central limit theorem makes it fine". The 2012 Kalibera & Jones report (§2) rejects people who "incorrectly state that the Central Limit Theorem is enough to overcome it". With only 10 values that argument does not hold. Ten reruns cannot prove normality. We state the assumption and show the rerun values. On the final ledger we will look at skew and at scores in time order. That check is planned, not built. The t interval is a safe choice (§8.6 of the report: "using the t-distribution even when normality assumptions cannot be made seems a safe choice").
+3. **The mean of 10 reruns is close to normal.** Do not argue "the central limit theorem makes it fine". The 2012 Kalibera & Jones report (§3.2) rejects people who "incorrectly state that the Central Limit Theorem is enough to overcome it". With only 10 values that argument does not hold. Ten reruns cannot prove normality. We state the assumption and show the rerun values. On the final ledger we will look at skew and at scores in time order. That check is planned, not built. The t interval is a safe choice (§8.6 of the report: "using the t-distribution even when normality assumptions cannot be made seems a safe choice").
 
 Hoefler & Belli (SC 2015) give a rule for this: "Do not assume normality of collected data (e.g., based on the number of samples) without diagnostic checking."
 

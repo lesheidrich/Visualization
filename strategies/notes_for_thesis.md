@@ -27,8 +27,9 @@ Reruns stay on one machine. These edits only change which level counts as one sa
 
 | Used for | Method | Citation |
 |---|---|---|
-| Error bars on across-reruns plots | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
-| Reported beside it as a check | 95% t interval | Already cited: [28] Georges 2007 |
+| Error bars on across-reruns throughput and `gc_alloc_rate_norm` plots | 95% t interval of the rerun means | Kalibera & Jones 2013 §9.3: [38] |
+| Error bars on across-reruns speedup plots | 95% paired Fieller interval of the ratio of means | Fieller 1954 (to add); von Luxburg & Franz 2009 (to add) |
+| Kept in the tables as a check, not drawn | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
 
 Per-rerun throughput plots keep the ledger's CI, and `pauses_max` has no CI.
 
@@ -40,7 +41,7 @@ Per-rerun throughput plots keep the ledger's CI, and `pauses_max` has no CI.
 
 Suggested wording, after the sentence ending "…with wide intervals indicating an imprecise result [35]." in §2.2.4 p.11, or in the methods chapter:
 
-> Ten reruns cannot establish normality [35], so intervals are computed by resampling whole reruns with a 95% percentile bootstrap. This interval is known to be somewhat narrow in small samples [Hesterberg 2015], covering roughly 90% rather than 95% on normal data at ten reruns, so a t interval [28] is reported beside it as a check.
+> Error bars are 95% t intervals over the rerun means [38], and speedup, a ratio of means, uses the paired Fieller interval [Fieller 1954]. Ten reruns cannot establish normality [35], so this is stated as an assumption. A 95% percentile bootstrap of whole reruns is kept in the tables as a check. It is known to be somewhat narrow in small samples [Hesterberg 2015], covering roughly 90% rather than 95% on normal data at ten reruns.
 
 The 90% figure comes from our own calculation, not a citable source, so present it as such.
 
@@ -59,7 +60,7 @@ Details are in [resampling.md](resampling.md).
 | Topic | What to say |
 |---|---|
 | Throughput | Scores are operations per second, and [35] warns against the arithmetic mean of such values in general. With fixed-length iterations, the mean equals total operations divided by total time, so it is valid here. This holds only if measured iteration durations really are equal. |
-| Speedup | Speedup across reruns is a ratio of means, mean(strategy) / mean(base), matching [35] and [38]. CIs resample whole reruns so each strategy stays paired with its base. |
+| Speedup | Speedup across reruns is a ratio of means, mean(strategy) / mean(base), matching [35] and [38]. The paired Fieller interval, like the bootstrap in the tables, keeps each strategy paired with its base from the same rerun. |
 | `gc_alloc_rate_norm`, `batch_fill` | These are means of per-rerun ratios with varying denominators. The effect should be small at low variation, but state it. |
 
 ## 5. 2A vs 2B comparison

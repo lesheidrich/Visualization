@@ -133,6 +133,7 @@ values and source file/row. Aggregate CSVs include source files, source rows and
 original strategy identifiers so contributions can be traced to per-rerun CSVs.
 Across-reruns CSVs hold `ci_low`, `ci_high` (resampled CI, for checks), `t_low`, `t_high` (drawn),
 `ci_method`, `ci_resamples` and `ci_seed` instead of ledger bounds.
+`ci_method` describes `ci_low` and `ci_high`; `interval_kind` names what the plot draws.
 Do not interpret absent observations as zero or overlapping error bars as
 significance tests. Plot and export values come from the same prepared result tables.
 
@@ -193,7 +194,7 @@ interval of reruns`). It is every ratio theta for which a t interval on (strateg
 base score) over the reruns contains zero: (ms - theta mb)^2 = t^2 (vss - 2 theta vsb + theta^2 vbb) / n,
 with the means, sample (n - 1) variances and covariance of the paired scores and t with n - 1
 degrees of freedom. Each strategy score stays with its base score from the same rerun. If the
-base mean cannot be told apart from zero at this level (or the equation has no solution), both
+base mean cannot be told apart from zero at this level, both
 columns are blank, no bar is drawn, and a warning names the group. For strategy scores 200, 210,
 190, 205, 195, 202, 198, 208, 192, 200 and base scores 100, 104, 96, 103, 98, 101, 99, 103, 97, 99
 the speedup is 2.0 and the interval is about [1.98867, 2.01105]. The CSV also keeps, for checks and

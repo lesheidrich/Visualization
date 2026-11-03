@@ -412,7 +412,8 @@ def fieller_interval(strategy_scores, base_scores, level=0.95):
     Solves (ms - theta*mb)^2 = t^2 * (vss - 2*theta*vsb + theta^2*vbb) / n for theta, with sample
     (ddof=1) variances and covariance of the paired scores and t on n-1 degrees of freedom.
     Returns (low, high), or None when the base mean cannot be told apart from zero at this level
-    (the theta^2 coefficient is not positive) or the discriminant is negative.
+    (the theta^2 coefficient is not positive). The discriminant is never negative in exact
+    arithmetic; its check only guards against rounding.
     """
     s = np.asarray(strategy_scores, dtype=float)
     b = np.asarray(base_scores, dtype=float)
@@ -425,8 +426,10 @@ def fieller_interval(strategy_scores, base_scores, level=0.95):
     if not a > 0:
         return None
     half_b = ms * mb - k * vsb  # half of the linear coefficient, sign flipped
-    c = ms * ms - k * vss
-    disc = half_b * half_b - a * c
+    # half_b^2 - a*c expanded, because subtracting those two huge numbers loses all precision when
+    # the ratios barely vary: k*(mb^2*var(s - point*b) - k*(vss*vbb - vsb^2)).
+    residual = vbb * (s - (vsb / vbb) * b).var(ddof=1) if vbb > 0 else 0.0
+    disc = k * (mb * mb * (s - (ms / mb) * b).var(ddof=1) - k * residual)
     if not disc >= 0:
         return None
     root = math.sqrt(disc)

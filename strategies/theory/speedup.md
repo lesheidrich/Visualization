@@ -59,9 +59,23 @@ The result is still 250 / 150 = 1.67 with coverage 2/3. Including the 900 would 
 
 ## Step 3: the error bar
 
-The method is a 95% percentile bootstrap, with a t interval reported beside it.
+The plot draws the 95% paired Fieller interval. The table also keeps a 95% percentile bootstrap and a t interval on the per-rerun ratios, for checks. They are not drawn.
 
-We have one speedup number, and the CI asks how much it could plausibly move given how much the reruns varied. We get that by resampling reruns, without rerunning any benchmark.
+### The drawn bar: paired Fieller
+
+The plotted point is a ratio of means, so the plain t formula can't go straight on it. Fieller is the t version for a ratio. It finds every ratio θ for which a t interval on (strategy − θ × Base), across the reruns, contains zero. Each strategy score stays with its Base score from the same rerun. It solves:
+
+```
+(ms − θ mb)² = t² (vss − 2θ vsb + θ² vbb) / n
+```
+
+Here ms and mb are the means of the strategy and Base scores, vss and vbb their sample variances, vsb their covariance, n the number of reruns, and t has n − 1 degrees of freedom. For strategy scores 200, 210, 190, 205, 195, 202, 198, 208, 192, 200 and Base scores 100, 104, 96, 103, 98, 101, 99, 103, 97, 99, the speedup is 2.0 and the interval is about [1.98867, 2.01105].
+
+If the Base mean can't be told apart from zero at this level, the interval has no bounds. Both columns stay blank, no bar is drawn, and a warning names the group. See `t_interval.md` for t itself.
+
+### The check in the table: resampling
+
+We have one speedup number, and the resampled CI asks how much it could plausibly move given how much the reruns varied. We get that by resampling reruns, without rerunning any benchmark.
 
 Take three reruns:
 
@@ -85,7 +99,7 @@ Do this 10,000 times and you get 10,000 speedups. Sort them: the value 2.5% of t
 
 **A picked rerun brings its strategy and its Base together.** We never combine the strategy from rerun 2 with the Base from rerun 3. That pairing is the benefit of measuring both in the same sweep: if a whole rerun runs slightly fast or slow, it affects both sides, and that shared effect cancels.
 
-**Base at N=1 gets no CI.** Its speedup is Base / Base, which is exactly 1 in every resample, so there is no spread.
+**Base at N=1 gets no interval of any kind.** Its speedup is Base / Base, which is exactly 1 in every rerun, so there is no spread.
 
 ## Reading the plot
 
@@ -117,6 +131,6 @@ speedup
 | Output | Contents |
 |---|---|
 | One plot and CSV per rerun | The per-rerun speedups, with `score`, `baseline_score` and `speedup` |
-| One plot and CSV across reruns | `speedup` (the ratio of means), `mean_score`, `mean_baseline_score`, `n_reruns`, `total_reruns`, and the CI columns `ci_low`, `ci_high`, `ci_method`, `ci_resamples`, `ci_seed`, `t_low`, `t_high`, `t_basis` |
+| One plot and CSV across reruns | `speedup` (the ratio of means), `mean_score`, `mean_baseline_score`, `n_reruns`, `total_reruns`, and the CI columns `ci_low`, `ci_high`, `ci_method`, `ci_resamples`, `ci_seed`, `t_low`, `t_high`, `t_basis`, and the drawn interval `fieller_low`, `fieller_high` |
 
 The per-rerun CSV already holds everything the resampling will need, so no new table is required.
