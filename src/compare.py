@@ -255,9 +255,9 @@ def render_ratio(table, config, benchmark):
     handles = [Line2D([], [], linestyle="none", marker="o", color="black", markersize=5,
                       label="geometric mean ratio"),
                Line2D([], [], color=colour, linewidth=6, alpha=0.45,
-                      label=f"{_level(data['equiv_level'].iloc[0])} equivalence interval"),
+                      label=f"{_level(data['equiv_level'].iloc[0])} interval (equivalence test)"),
                Line2D([], [], color=colour, linewidth=1.5,
-                      label=f"{_level(data['diff_level'].iloc[0])} difference interval")]
+                      label=f"{_level(data['diff_level'].iloc[0])} interval (difference test)")]
     if margin is not None:
         for line in (1 + margin, 1 / (1 + margin)):
             ax.axhline(line, color=grey, linestyle="--", linewidth=1, zorder=1)

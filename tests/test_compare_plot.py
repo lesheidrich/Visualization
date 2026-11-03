@@ -188,14 +188,14 @@ def test_spec_four_thread_counts_legend_levels(tmp_path):
     """WHEN a benchmark has four thread counts THEN the legend says 97.5% (thick) and 98.75% (thin)."""
     fig, _ = draw(ledger({n: A for n in (1, 2, 4, 8)}), tmp_path)
     labels = legend_labels(fig)
-    assert "97.5% equivalence interval" in labels and "98.75% difference interval" in labels
-    assert labels[1:3] == ["97.5% equivalence interval", "98.75% difference interval"]
+    assert "97.5% interval (equivalence test)" in labels and "98.75% interval (difference test)" in labels
+    assert labels[1:3] == ["97.5% interval (equivalence test)", "98.75% interval (difference test)"]
 
 
 def test_spec_five_thread_counts_legend_levels(tmp_path):
     fig, _ = draw(ledger(five()), tmp_path)
-    assert legend_labels(fig) == ["geometric mean ratio", "98% equivalence interval",
-                                  "99% difference interval", "margin 5%", "no difference"]
+    assert legend_labels(fig) == ["geometric mean ratio", "98% interval (equivalence test)",
+                                  "99% interval (difference test)", "margin 5%", "no difference"]
 
 
 def test_spec_no_spread_row_has_dot_and_no_bars_and_adds_no_warning(tmp_path, recwarn):
@@ -229,8 +229,8 @@ def test_spec_no_margin(tmp_path, capsys):
     fig, _ = draw(ledger(five()), tmp_path, margin=None)
     _, _, lines = parts(fig)
     assert lines == [(1.0, "-")]
-    assert legend_labels(fig) == ["geometric mean ratio", "98% equivalence interval",
-                                  "99% difference interval", "no difference"]
+    assert legend_labels(fig) == ["geometric mean ratio", "98% interval (equivalence test)",
+                                  "99% interval (difference test)", "no difference"]
     # through the command: the only warning is the existing no-margin one, once
     _, warns, folder = run_command(tmp_path, capsys, ledger(five()))
     assert warns == [NO_MARGIN_WARNING]
@@ -244,7 +244,7 @@ def test_spec_verdicts_stay_in_the_table(tmp_path):
     assert list(fig.axes[0].texts) == [] and list(fig.texts) == []
     everything = " ".join(t.get_text() for t in fig.findobj(Text))
     for word in ("equivalent ", "faster", "inconclusive", "below margin", "dirty_build", "work_differs"):
-        assert word not in everything.replace("equivalence interval", "")
+        assert word not in everything.replace("(equivalence test)", "")
 
 
 # ---- integration / feature --------------------------------------------------------------------------
