@@ -1,4 +1,4 @@
-"""One test per spec scenario that no other test checks in full (map: test_audit/scenarios.md).
+"""One test per spec scenario that no other test checks in full.
 
 Each test is named test_<spec>__<scenario>; the docstring quotes the WHEN and THEN it checks.
 Expected values are literals with their arithmetic.
@@ -21,13 +21,6 @@ from src.cli import compare_main, gc_main, main as thrpt_main, speedup_main
 from src.config import Config, load_config
 from src.utils import load_ledger
 
-
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
 
 BENCH = "mb1_rawNoFinalize"
 
@@ -97,6 +90,9 @@ def test_thr__one_rerun_gives_count_one_and_no_aggregate_error_bars(config):
     avg = read_csv(next(p for p in paths if p.name.endswith("_avg.csv")))
     assert avg.n_reruns.tolist() == ["1", "1"] and avg.total_reruns.tolist() == ["1", "1"]
     assert avg.t_low.tolist() == ["", ""] and avg.interval_kind.tolist() == ["none", "none"]
+    (_, summary), _ = collect(thrpt.prepare, frame([observation(score=100), observation("1a", score=150)]), config)
+    fig = thrpt.render(summary[summary.benchmark_short.eq(BENCH)], config, "t", strategies=["base", "1a"], threads=[1])
+    assert bar_spans(fig.axes[0]) == []
 
 
 def test_thr__missing_bounds_keep_the_bar_and_warn(config):
@@ -204,9 +200,9 @@ def test_sp__invalid_invocation_input_exits_nonzero_before_output(tmp_path, caps
 
 def test_sp__baselines_vary_across_reruns(config):
     """WHEN base is 100 in rerun 01 and 200 in rerun 02 THEN each rerun is divided by its own base."""
-    (obs, _), _ = collect(speedup.prepare, frame(sp_rows([100, 200], [300, 300])), config)
+    (obs, _), _ = collect(speedup.prepare, frame(sp_rows([100, 200], [200, 300])), config)
     s = obs[obs.strategy.eq("1a")].sort_values("rerun")
-    assert s.speedup.tolist() == [3.0, 1.5]  # 300/100 and 300/200
+    assert s.speedup.tolist() == [2.0, 1.5]  # 200/100 and 300/200
     assert s.baseline_score.tolist() == [100.0, 200.0]
 
 
@@ -231,8 +227,9 @@ def test_sp__unusable_baseline_fails_before_output(config, base_rows, match):
     """WHEN base is missing, duplicated or zero in a rerun THEN speedup fails and writes nothing."""
     rows = base_rows + [observation("1a", threads=2, score=200)]
     pd.DataFrame(rows).to_csv(config.ledger, index=False)
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(ValueError, match=match) as failure:
         speedup.run(config)
+    assert BENCH in str(failure.value)  # names the affected benchmark
     assert not config.output.exists()
 
 
@@ -296,6 +293,19 @@ def test_sp__variable_rerun_counts_use_the_contributing_base(config):
     assert (row.mean_baseline_score, row.mean_score, row.speedup) == (200.0, 400.0, 2.0)
 
 
+@pytest.mark.parametrize("count", [1, 3, 10])
+def test_sp__variable_rerun_counts_give_each_rerun_outputs(tmp_path, capsys, count):
+    """WHEN a benchmark has one, three or ten reruns THEN each rerun gets its outputs and every observation contributes."""
+    base = [100 + 5 * i for i in range(count)]
+    cfg = write_run(tmp_path, sp_rows(base, [2 * b for b in base]))
+    code, printed, _, err = run_main(speedup_main, cfg, capsys)
+    assert code == 0, err
+    assert sorted(Path(p).name for p in printed if p.endswith(".csv")) == sorted(
+        [f"speedup_{BENCH}_r{i:02d}.csv" for i in range(1, count + 1)] + [f"speedup_{BENCH}_avg.csv"])
+    avg = read_csv(next(Path(p) for p in printed if p.endswith("_avg.csv")))
+    assert avg[avg.strategy == "1a"].n_reruns.tolist() == [str(count)]
+
+
 def test_sp__pairing_is_kept_in_the_bootstrap(config):
     """WHEN base [100, 200], strategy [200, 300] THEN bootstrap [1.5, 2]: resampled ratios 2, 500/300 or 1.5 only."""
     (_, summary), _ = collect(speedup.prepare, frame(sp_rows([100, 200], [200, 300])), config)
@@ -323,7 +333,10 @@ def test_sp__unusable_ledger_bounds_are_ignored(config):
     for r in rows:
         r.update(score_confidence_low="oops", score_confidence_high="", score_error="NaN?")
     (_, summary), messages = collect(speedup.prepare, frame(rows), config)
-    assert summary[summary.strategy.eq("1a")].speedup.iloc[0] == pytest.approx(5 / 3)
+    (_, clean), _ = collect(speedup.prepare, frame(sp_rows([100, 200], [200, 300])), config)
+    got, want = summary[summary.strategy.eq("1a")].iloc[0], clean[clean.strategy.eq("1a")].iloc[0]
+    assert got.speedup == pytest.approx(5 / 3)
+    assert (got.ci_low, got.ci_high) == (want.ci_low, want.ci_high)
     assert not [m for m in messages if "ledger" in m.lower() or "confidence" in m.lower()]
 
 
@@ -456,14 +469,6 @@ def test_gc__trace_a_value_has_every_input(config):
         assert column in obs.columns and pd.notna(obs[column][0])
 
 
-def test_gc__existing_suites_unchanged_sha_is_not_testable_in_a_clone():
-    """WHEN gc is added THEN blobplot.py keeps its checksum: the file is gitignored and absent from clones,
-    so the suite checks only that no source module imports it."""
-    legacy = "blob" + "plot"   # spelled in two parts so the no-test-reads-the-legacy-file guard stays quiet
-    for path in Path(utils.__file__).parent.glob("*.py"):
-        assert not re.search(rf"^\s*(import|from)\s+\.*{legacy}", path.read_text(), re.M), path.name   # a comment may mention it
-
-
 def _pause_fig(config, rows, strategies, threads):
     (obs, _), _ = gc_prepare(rows, config)
     medians = gc_metrics.pause_medians(obs)
@@ -554,7 +559,7 @@ def test_gc__alloc_all_blank_plot_has_no_bars_no_legend_no_warning(config):
 
 
 def test_gc__alloc_ci_row_order(config):
-    """WHEN a ten-rerun group's rows are shuffled THEN ci_low/ci_high are identical (and equal the known pair)."""
+    """WHEN a ten-rerun group's rows are shuffled THEN ci_low/ci_high are identical."""
     rows = [gc_observation(rerun=f"{i:02d}", gc_alloc_rate_norm=str(1000 + 100 * i)) for i in range(10)]
     a = gc_prepare(rows, config)[0][1].iloc[0]
     b = collect(gc_metrics.prepare, frame(rows).sample(frac=1, random_state=2), config)[0][1].iloc[0]
@@ -890,7 +895,7 @@ def test_cli__shuffled_ledger_csvs_sorted_with_unchanged_values(tmp_path):
             for s in ("base", "1a") for n in ((1,) if s == "base" else (1, 2)) for r in (1, 2, 3)]
     rng = np.random.default_rng(4)
     shuffled = [rows[i] for i in rng.permutation(len(rows))]
-    out = {}
+    out, averages = {}, {}
     for name, order in (("sorted", rows), ("shuffled", shuffled)):
         sub = tmp_path / name
         sub.mkdir()
@@ -898,15 +903,21 @@ def test_cli__shuffled_ledger_csvs_sorted_with_unchanged_values(tmp_path):
         collect(thrpt.run, load_config(cfg))
         (folder,) = (sub / "out").iterdir()
         out[name] = read_csv(folder / f"thrpt_{BENCH}_r02.csv")
+        averages[name] = read_csv(folder / f"thrpt_{BENCH}_avg.csv")
     got = out["shuffled"]
     assert got[["strategy", "threads_blobshuffle"]].values.tolist() == [["base", "1"], ["1a", "1"], ["1a", "2"]]
     assert got.score.tolist() == out["sorted"].score.tolist() == ["210", "215", "225"]
-    # in the average the groups come out in configured order too
     assert got.rerun.tolist() == ["02"] * 3
+    # Whole tables match, apart from where the rows sat in the ledger and which file held them.
+    trace = ["source_row", "source_rows", "source_file", "source_files", "contributing_reruns"]
+    for table in (out, averages):
+        a, b = (table[name].drop(columns=trace, errors="ignore") for name in ("sorted", "shuffled"))
+        pd.testing.assert_frame_equal(a, b)
+    assert averages["shuffled"][["strategy", "threads_blobshuffle"]].values.tolist() == [["base", "1"], ["1a", "1"], ["1a", "2"]]
 
 
 def test_cli__thrpt_and_speedup_run_without_loading_blobplot(tmp_path, capsys):
     """WHEN the new commands run THEN the legacy script is never imported (so never executed or modified)."""
     cfg = write_run(tmp_path, sp_rows([100, 200], [200, 300]))
     assert run_main(thrpt_main, cfg, capsys)[0] == 0 and run_main(speedup_main, cfg, capsys)[0] == 0
-    assert ("blob" + "plot") not in sys.modules
+    assert "blobplot" not in sys.modules

@@ -20,13 +20,6 @@ from src.speedup import prepare, render
 from src.utils import load_ledger
 
 
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
-
 BENCH = "mb1_rawNoFinalize"
 BASE = [100, 104, 96, 103, 98, 101, 99, 103, 97, 99]
 ONE_A = [200, 210, 190, 205, 195, 202, 198, 208, 192, 200]

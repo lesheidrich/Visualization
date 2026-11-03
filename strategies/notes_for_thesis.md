@@ -8,6 +8,8 @@ Changes the thesis will need, to deal with later. Nothing here has been applied.
 |---|---|---|
 | Hesterberg 2015, "What Teachers Should Know About the Bootstrap", The American Statistician 69(4):371–386, doi:10.1080/00031305.2015.1089789 | Required for any bootstrap CI | The thesis does not mention the bootstrap yet |
 | Schenker & Gentleman 2001, "On Judging the Significance of Differences by Examining the Overlap Between Confidence Intervals", The American Statistician 55(3):182–186, doi:10.1198/000313001317097960 | Recommended | Citation for the uncited overlap sentence in §2.2.4 p.11 |
+| Fieller 1954, Journal of the Royal Statistical Society B, doi:10.1111/j.2517-6161.1954.tb00159.x | Required for the speedup error bars | The speedup plots draw a paired Fieller interval |
+| von Luxburg & Franz 2009, Statistica Sinica 19(3), https://arxiv.org/pdf/0711.0198 | Recommended | Practical reference for a confidence interval of a ratio of means |
 
 ## 2. Reruns as the replicates
 

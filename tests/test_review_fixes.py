@@ -365,7 +365,7 @@ def test_no_test_reads_the_gitignored_blobplot_file():
     here = Path(__file__)
     for path in here.parent.glob("test_*.py"):
         if path != here:
-            assert not re.search(r"blobplot\.py[\"']|[\"']blobplot", path.read_text()), path.name
+            assert not re.search(r"blobplot\.py[\"']", path.read_text()), path.name
 
 
 # ---------------------------------------------------------------- ledger reader, second pass

@@ -20,13 +20,6 @@ from src.thrpt import prepare, render
 from src.utils import load_ledger
 
 
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
-
 BENCH = "mb1_rawNoFinalize"
 
 

@@ -23,13 +23,6 @@ from src.gc_metrics import pause_medians, prepare, render_alloc, render_pauses
 from src.utils import load_ledger
 
 
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
-
 BENCH = "mb1_rawNoFinalize"
 BASE = {  # rerun -> (score, alloc, count, gc_time, pauses_max, p99, recordBytes)
     "01": (100, 1000, 10, 2500, 5, 2, "1677.7216"),

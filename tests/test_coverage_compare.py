@@ -14,13 +14,6 @@ from conftest import observation
 from src.cli import compare_main
 
 
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
-
 BENCH = "mb1_rawNoFinalize"
 A = {1: [110, 210, 330], 2: [110, 220, 330]}
 B = [100, 200, 300]

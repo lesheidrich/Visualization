@@ -419,7 +419,7 @@ def fieller_interval(strategy_scores, base_scores, level=0.95):
     b = np.asarray(base_scores, dtype=float)
     n = len(s)
     ms, mb = s.mean(), b.mean()
-    vss, vbb = s.var(ddof=1), b.var(ddof=1)
+    vbb = b.var(ddof=1)
     vsb = float(np.sum((s - ms) * (b - mb)) / (n - 1))
     k = t_quantile(1 - (1 - level) / 2, n - 1) ** 2 / n
     a = mb * mb - k * vbb

@@ -148,6 +148,7 @@ def test_speedup_ignores_optional_bounds_without_warnings(config):
     frame["score_confidence_high"] = "not-an-interval"
     frame["score_error"] = "unused"
     with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
         _, summary = prepare(frame, config)
     assert summary[summary.strategy.eq("1a")].speedup.iloc[0] == 1.6666666666666667  # 250 / 150
     # Only the Fieller warning (two reruns, base 100 and 200); nothing about the ledger bounds.

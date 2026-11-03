@@ -19,13 +19,6 @@ from src.utils import (fieller_interval, has_spread, load_ledger, normalize_thro
 # ---- config ------------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _close_figures():
-    """Figures built by render() calls here must not leak into tests that count open figures."""
-    yield
-    import matplotlib.pyplot as plt
-    plt.close("all")
-
 def cfg(tmp_path, text):
     path = tmp_path / "config.yaml"
     path.write_text(text)
@@ -145,7 +138,7 @@ def test_t_interval_literal():
 
 
 def test_fieller_none_when_base_mean_indistinguishable_from_zero():
-    assert fieller_interval([200, 300, 600], [100, 200, 300]) is None  # a = 200^2 - 18.5 * 10000 < 0
+    assert fieller_interval([200, 300, 600], [100, 200, 300]) is None  # a = 200^2 - (18.5 / 3) * 10000 < 0
 
 
 def test_fieller_degenerate_perfect_correlation_collapses_to_the_ratio():
