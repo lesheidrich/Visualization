@@ -16,7 +16,7 @@ What we are building and where each piece stands. There are four features, and a
 |---|---|
 | Rerun value | The one number a rerun gives for a strategy, thread count and metric. |
 | Mean of reruns | The mean of those rerun values. This is the bar height. |
-| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput, `gc_alloc_rate_norm` and `batch_fill` (mb2 only) mean-of-reruns plots. |
+| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput, `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` (mb2 only) mean-of-reruns plots. |
 | Paired Fieller interval | The t-based interval for a ratio of means that keeps each strategy score with its base score from the same rerun. This is the error bar on speedup mean-of-reruns plots. |
 | Resampled CI | A 95% percentile bootstrap of the rerun values. It stays in the tables for tests and sanity checks and is not drawn. |
 
@@ -49,8 +49,8 @@ One row per benchmark, strategy, thread count and rerun, plus the mean of reruns
 |---|---|---|---|---|
 | `gc_alloc_rate_norm` (B/op) | `thrpt` | ✓ | ✓ | Yes: `add-gc-alloc-plot`. Bars are the mean of reruns, raw values, linear axis from zero, no log axis. Error bars are the 95% t interval, in the `_avg` CSV as `gc_alloc_rate_norm_t_low` and `_t_high`. The resampled CI stays there as `gc_alloc_rate_norm_ci_low` and `_ci_high`, for checks, not drawn. |
 | `gc_count` | `thrpt` | ✓ | X | Yes |
-| `gc_time` (ms) | `thrpt` | ✓ | X | Yes |
-| `gc_time_pct` | `thrpt` | ✓ | X | Yes |
+| `gc_time` (ms) | `thrpt` | ✓ | X | Table only. The plot is `gc_time_pct`. |
+| `gc_time_pct` | `thrpt` | ✓ | ✓ | Yes: `add-gc-time-plot`. Bars are the mean of reruns on a linear axis from zero. Error bars are the 95% t interval, in the `_avg` CSV as `gc_time_pct_t_low` and `_t_high`. The axis top is 1.1 times the highest drawn value, rounded up to the next 1, 2 or 5 times a power of ten (0 gives 1). |
 | `pauses_max` (ms) | `thrpt` | ✓ | ✓ | No: one dot per rerun plus a median line |
 | `pauses_p99` (ms) | `thrpt` | ✓ | X | Owner decision: stays in the GC table, not plotted |
 | `batch_fill` | `thrpt` | ✓ | ✓ | Yes: `add-batch-fill-plot`, `mb2_rawFinalize` only. Bars are the mean of reruns on a linear axis from zero, with its top at the larger of 1 and the automatic top. Error bars are the 95% t interval, in the `_avg` CSV as `batch_fill_t_low` and `_t_high`. |

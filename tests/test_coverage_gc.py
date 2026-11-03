@@ -61,10 +61,11 @@ METRICS = ["gc_alloc_rate_norm", "gc_count", "gc_time", "gc_time_pct", "pauses_m
 
 def test_shape_files_and_folder_name(run):
     expected = sorted([f"gc_{BENCH}_r_all.csv", f"gc_{BENCH}_avg.csv", f"gc_{BENCH}_pauses_max_median.csv",
-                       f"gc_{BENCH}_pauses_max.png", f"gc_{BENCH}_gc_alloc_rate_norm.png"]
+                       f"gc_{BENCH}_pauses_max.png", f"gc_{BENCH}_gc_alloc_rate_norm.png",
+                       f"gc_{BENCH}_gc_time_pct.png"]
                       + [f"gc_{BENCH}_{m}_pivot.csv" for m in METRICS])
     assert sorted(p.name for p in run["dir"].iterdir()) == expected
-    assert len(run["printed"]) == 12
+    assert len(run["printed"]) == 13
     assert run["dir"].name.endswith("_gc_pauses")
 
 

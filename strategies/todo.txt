@@ -8,8 +8,7 @@ TODO (written 2026-11-02)
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
 │ batch_fill plot       │ Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot)                        │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ gc_count and gc_time  │ Your notes list them (line 10), but they're only in the table so far                 │
-│ plots                 │                                                                                      │
+│ gc_time plot          │ Done as gc_time_pct (add-gc-time-plot). gc_count stays table only                    │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
 │ Stdev or CV %         │ Undecided: your notes drop CV % on line 30 but propose it on lines 121–128           │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
@@ -33,8 +32,8 @@ Ideas from research_questions.txt. Not built. Nobody has decided whether to buil
 [x] batch_fill plot
     Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot).
 
-[ ] gc_count and gc_time plots
-    Notes line 10. Only in the table so far.
+[x] gc_time plot
+    Done as gc_time_pct (add-gc-time-plot). gc_count remains table only.
     Raw gc_count favours slower strategies, because faster ones do more work and collect more often.
 
 [ ] Stdev or CV %

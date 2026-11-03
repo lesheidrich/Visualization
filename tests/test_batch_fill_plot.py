@@ -278,7 +278,7 @@ def test_scenario_other_outputs_unchanged(tmp_path, monkeypatch, capsys):
     for name in without_names:
         if name.endswith((".csv", ".png")):
             assert (tmp_path / "with_plot" / name).read_bytes() == (without_folder / name).read_bytes(), name
-    assert len(without_names) == 2 * (10 + 3 * 2)       # 10 CSVs, pauses_max and alloc in 3 formats, twice
+    assert len(without_names) == 2 * (10 + 3 * 3)       # 10 CSVs, pauses_max, alloc and gc_time_pct in 3 formats, twice
 
 
 def test_help_names_the_batch_fill_plot():
