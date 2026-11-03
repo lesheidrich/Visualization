@@ -236,8 +236,10 @@ def test_supplied_synthetic_ledger_supports_both_features():
     frame = load_ledger(config.ledger, config.delimiter)
     individual, average = prepare(frame, config)
     throughput, throughput_average = prepare_throughput(frame, config)
-    assert len(individual) == len(throughput) == 820
-    assert len(average) == len(throughput_average) == 82
+    # 820 sample rows minus the 100 of 2null (2 benchmarks x 5 thread counts x 10 reruns), which config.yaml excludes.
+    assert len(individual) == len(throughput) == 720
+    assert len(average) == len(throughput_average) == 72
+    assert "2null" not in set(individual.strategy)
     assert set(individual.benchmark_short) == {"mb1_rawNoFinalize", "mb2_rawFinalize"}
     assert average.n_reruns.eq(10).all() and average.total_reruns.eq(10).all()
     assert individual[individual.strategy.eq("base")].speedup.eq(1).all()

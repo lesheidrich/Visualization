@@ -12,7 +12,7 @@ from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has
 def prepare(frame, config):
     """Pair with base at one thread; aggregate as a ratio of mean scores."""
     observations = normalize_throughput(frame, config.benchmarks, config.labels,
-                                       include_bounds=False)
+                                       include_bounds=False, exclude=config.exclude)
     keys = ["benchmark_short", "rerun"]
     base = observations[observations["strategy"].eq("base") &
                         observations["threads_blobshuffle"].eq(1)]

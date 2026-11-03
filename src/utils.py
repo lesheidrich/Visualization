@@ -130,7 +130,7 @@ def numeric(frame, column, *, optional=False):
     return values
 
 
-def normalize_throughput(frame, benchmarks, labels, *, include_bounds=True):
+def normalize_throughput(frame, benchmarks, labels, *, include_bounds=True, exclude=()):
     """Select and validate throughput; do not require later-feature metrics."""
     required = {"strategy", "benchmark_short", "mode", "rerun", "threads_blobshuffle",
                 "score", "score_unit"}
@@ -152,6 +152,8 @@ def normalize_throughput(frame, benchmarks, labels, *, include_bounds=True):
             raise ValueError(f"Missing {col} at ledger row(s) {frame.loc[frame[col].eq(''), 'source_row'].tolist()}")
     frame["strategy_original"] = frame["strategy"]
     frame["strategy"] = frame["strategy"].map(strategy_key)
+    if exclude:  # configured exclusion: gone before any later check or warning
+        frame = frame[~frame["strategy"].isin({strategy_key(key) for key in exclude})].copy()
     unknown = sorted(set(frame["strategy"]) - set(labels))
     if unknown:
         warn(f"Unknown strategies retained: {unknown}")

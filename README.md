@@ -30,6 +30,13 @@ command groups. It does not read a configuration or ledger or generate plots.
 Edit the `config.yaml` in the project root to choose the ledger, benchmarks, output directory,
 image formats, strategy labels/order/colours, and plot presentation. To use another
 configuration, run `uv run thrpt --config /path/to/config.yaml`.
+`strategies.exclude` is a list of strategy keys (default: empty, so every strategy is kept).
+`thrpt`, `speedup`, `gc` and `compare` drop the rows of a listed strategy when they read the ledger,
+before any other check, so an excluded strategy appears in no plot, table or warning, and a
+malformed row of it does not stop a run. A listed key the ledger lacks is ignored; a ledger spelling
+that resolves to the key (for example `2null ` or `2NULL`) is excluded too. Anything other than a list of
+nonempty strings fails naming the setting, before any output. The repository's `config.yaml` excludes
+`2null` (S2_0); the ledger keeps its rows, and the other strategies keep their values.
 Speedup accepts the same settings with `uv run speedup --config /path/to/config.yaml`;
 no additional YAML settings are required. Its reference is fixed to `base` at one
 BlobShuffle thread.

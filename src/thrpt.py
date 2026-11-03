@@ -16,7 +16,7 @@ LEDGER_LEVEL = "99.9%"  # JMH's confidence level, per the ledger's legend.
 
 def prepare(frame, config):
     """Return normalized observations and mean of reruns with a t interval and a bootstrap CI for checks."""
-    observations = normalize_throughput(frame, config.benchmarks, config.labels)
+    observations = normalize_throughput(frame, config.benchmarks, config.labels, exclude=config.exclude)
     has_bounds = observations["score_confidence_low"].notna() & observations["score_confidence_high"].notna()
     observations["interval_kind"] = np.where(has_bounds, LEDGER_BOUNDS, "none")
     observations["n_reruns"] = 1

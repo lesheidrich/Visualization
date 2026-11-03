@@ -19,6 +19,8 @@ strategies:
     '3': S3
     '4': S4
   order: [base, 1a, 1b, 1c, 2null, 2a, 2b, '3', '4']
+  # S2_0 (ledger key 2null) is left out of every plot and table; the ledger keeps its rows.
+  exclude: [2null]
   colors: {}  # Optional strategy identifier -> Matplotlib colour
 plot:
   figsize: [12, 6]

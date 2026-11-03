@@ -28,6 +28,7 @@ class Config:
     dpi: int = 150
     show: bool = False
     comparison_margin: float | None = None
+    exclude: tuple[str, ...] = ()
 
 
 def _mapping(value, location, allowed=None):
@@ -59,7 +60,7 @@ def load_config(path):
     raw = _mapping(raw, "config", {"input", "output", "benchmarks", "strategies", "plot", "comparison"})
     source = _mapping(raw.get("input", {}), "input", {"path", "delimiter"})
     output = _mapping(raw.get("output", {}), "output", {"directory", "formats"})
-    strategies = _mapping(raw.get("strategies", {}), "strategies", {"labels", "order", "colors"})
+    strategies = _mapping(raw.get("strategies", {}), "strategies", {"labels", "order", "colors", "exclude"})
     plot = _mapping(raw.get("plot", {}), "plot", {"figsize", "dpi", "show"})
 
     comparison = _mapping(raw.get("comparison", {}), "comparison", {"margin"})
@@ -89,6 +90,11 @@ def load_config(path):
     if any(not isinstance(k, str) or not isinstance(v, str) or not is_color_like(v)
            for k, v in colors.items()):
         raise ValueError("strategies.colors must map string identifiers to valid colours")
+    exclude = strategies.get("exclude", [])
+    if not isinstance(exclude, list) or any(not isinstance(item, str) or not item.strip() for item in exclude):
+        raise ValueError("strategies.exclude must be a list of nonempty strings")
+    if len(set(exclude)) != len(exclude):
+        raise ValueError("strategies.exclude contains duplicate entries")
     formats = _strings(output.get("formats", ["png"]), "output.formats")
     if set(formats) - {"png", "pdf", "svg"}:
         raise ValueError("output.formats supports png, pdf, svg")
@@ -105,4 +111,4 @@ def load_config(path):
         raise ValueError("plot.show must be true or false")
     return Config(ledger, destination, None if delimiter == "auto" else delimiter,
                   benchmarks, labels, order, colors, formats, tuple(size), dpi, show,
-                  None if margin is None else float(margin))
+                  None if margin is None else float(margin), tuple(exclude))

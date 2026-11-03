@@ -103,7 +103,7 @@ def prepare(frame, config):
     if missing:
         raise ValueError(f"Missing ledger column(s): {sorted(missing)}")
     observations = normalize_throughput(frame, config.benchmarks, config.labels,
-                                        include_bounds=False)
+                                        include_bounds=False, exclude=config.exclude)
     # Left in the ledger's unit, so they don't belong beside a score in ops/s.
     observations = observations.drop(columns=[c for c in ("score_error", "score_confidence_low", "score_confidence_high")
                                               if c in observations])

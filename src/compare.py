@@ -148,7 +148,7 @@ def flag_list(rows_a, rows_b, unknown, unbalanced):
 
 def prepare(frame, config, first="2a", second="2b"):
     """Validate every pairing and build one summary table per benchmark."""
-    observations = normalize_throughput(frame, config.benchmarks, config.labels, include_bounds=False)
+    observations = normalize_throughput(frame, config.benchmarks, config.labels, include_bounds=False, exclude=config.exclude)
     margin = getattr(config, "comparison_margin", None)
     if margin is None:
         warn("No comparison margin set: equivalence cannot be claimed")
