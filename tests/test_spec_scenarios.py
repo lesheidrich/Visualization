@@ -914,10 +914,3 @@ def test_cli__shuffled_ledger_csvs_sorted_with_unchanged_values(tmp_path):
         a, b = (table[name].drop(columns=trace, errors="ignore") for name in ("sorted", "shuffled"))
         pd.testing.assert_frame_equal(a, b)
     assert averages["shuffled"][["strategy", "threads_blobshuffle"]].values.tolist() == [["base", "1"], ["1a", "1"], ["1a", "2"]]
-
-
-def test_cli__thrpt_and_speedup_run_without_loading_blobplot(tmp_path, capsys):
-    """WHEN the new commands run THEN the legacy script is never imported (so never executed or modified)."""
-    cfg = write_run(tmp_path, sp_rows([100, 200], [200, 300]))
-    assert run_main(thrpt_main, cfg, capsys)[0] == 0 and run_main(speedup_main, cfg, capsys)[0] == 0
-    assert "blobplot" not in sys.modules

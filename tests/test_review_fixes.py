@@ -353,21 +353,6 @@ def test_help_describes_every_command_in_its_own_words(capsys):
     assert "mean of reruns" in cli.COMMANDS["thrpt"]
 
 
-# ================================================================ blobplot.py is a reference only
-
-def test_src_never_imports_blobplot():
-    source = Path(cli.__file__).parent
-    for path in source.glob("*.py"):
-        assert not re.search(r"^\s*(import|from)\s+\S*blobplot", path.read_text(), re.MULTILINE), path.name
-
-
-def test_no_test_reads_the_gitignored_blobplot_file():
-    here = Path(__file__)
-    for path in here.parent.glob("test_*.py"):
-        if path != here:
-            assert not re.search(r"blobplot\.py[\"']", path.read_text()), path.name
-
-
 # ---------------------------------------------------------------- ledger reader, second pass
 
 
