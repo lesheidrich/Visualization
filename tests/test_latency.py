@@ -18,6 +18,7 @@ from audit_support import read_csv, run_main, write_run
 from src import cli, latency
 from src.ci import T_METHOD, CI_METHOD, bootstrap_ci, cell_seed
 from src.config import load_config
+from src.utils import PlainLogFormatter
 
 MB1 = "mb1_rawNoFinalize"
 MB2 = "mb2_rawFinalize"
@@ -25,6 +26,7 @@ ROOT = Path(__file__).parents[1]
 RAW3 = ROOT / "docs" / "raw3.csv"
 P = ("p50", "p90", "p95", "p99", "p99_9", "p99_99", "p100")
 BASE_VALUES = (100, 110, 120, 130, 140, 150, 160)
+TEN = [1, 2, 3.5, 5, 9, 11, 14, 17, 23, 31]  # Ten distinct reruns: the resampled CI depends on seed and order.
 
 
 def row(strategy="1a", threads=1, rerun="01", values=BASE_VALUES, unit="ns/op", benchmark=MB1, mode="sample", **extra):
@@ -176,12 +178,15 @@ def test_unit_table_columns_and_shape(tmp_path, monkeypatch, capsys):
 
 
 def test_unit_seeds_are_per_percentile_and_row_order_free(config):
-    rows = group("1a", 1, [1, 2, 3.5, 5, 9])
+    rows = group("1a", 1, TEN)
     _, one = latency.prepare(pd.DataFrame(rows), config)
     _, two = latency.prepare(pd.DataFrame(rows[::-1]), config)
-    expected = bootstrap_ci(np.array([1, 2, 3.5, 5, 9]) * 130, seed=cell_seed(MB1, "1a", 1, "latency_p99"))
+    expected = bootstrap_ci(np.array(TEN) * 130, seed=cell_seed(MB1, "1a", 1, "latency_p99"))
     assert (one.p99_ci_low[0], one.p99_ci_high[0]) == pytest.approx(expected)
-    assert one.p99_ci_low[0] == two.p99_ci_low[0] and one.p99_t_high[0] == two.p99_t_high[0]
+    assert one.p99_ci_low[0] == two.p99_ci_low[0] and one.p99_ci_high[0] == two.p99_ci_high[0]
+    assert one.p99_t_high[0] == two.p99_t_high[0]
+    other = bootstrap_ci(np.array(TEN) * 130, seed=cell_seed(MB1, "1a", 1, "latency_p50"))
+    assert other != expected    # the seed really matters here, so a wrong seed fails above
 
 
 def test_spec_no_spread_blank_with_one_warning(tmp_path, monkeypatch, capsys):
@@ -315,12 +320,77 @@ def test_spec_no_interval_has_no_band_and_no_method_in_title(tmp_path, monkeypat
         assert fig.axes[0].get_lines()
 
 
-def test_unit_colours_follow_config_and_strategy_position(tmp_path, monkeypatch, capsys):
+def test_unit_colours_follow_strategy_position(tmp_path, monkeypatch, capsys):
     rows = group("base", 1, [1, 2, 3]) + group("1a", 1, [1, 2, 3])
     _, _, _, figures, _ = run(tmp_path, monkeypatch, capsys, rows)
     lines = figures[f"latency_{MB1}_spectrum"].axes[0].get_lines()
     assert to_rgba(lines[0].get_color())[:3] == pytest.approx(to_rgba("#1f77b4")[:3])
     assert to_rgba(lines[1].get_color())[:3] == pytest.approx(to_rgba("#ff7f0e")[:3])
+
+
+def test_unit_colours_follow_config(tmp_path):
+    from src.config import Config
+    config = Config(tmp_path, tmp_path, benchmarks=(MB1,), figsize=(6, 3), dpi=40, colors={"1a": "#123456", "base": "#654321"})
+    rows = group("base", 1, [1, 2, 3]) + group("1a", 1, [1, 2, 3]) + group("1a", 2, [1, 2, 3])
+    _, averages = latency.prepare(pd.DataFrame(rows), config)
+    spectrum = latency.render_spectrum(averages, config, MB1, strategies=["base", "1a"], threads=[1, 2])
+    lines = spectrum.axes[0].get_lines()
+    assert lines[0].get_color() == "#654321" and lines[1].get_color() == "#123456"
+    assert to_rgba("#123456")[:3] == pytest.approx(tuple(bands(spectrum.axes[1])[0].get_facecolor()[0][:3]))
+    assert [to_rgba(h.get_color()) for h in spectrum.legends[0].get_lines()] == [to_rgba("#654321"), to_rgba("#123456")]
+    both = latency.render_percentiles(averages, config, MB1, strategies=["base", "1a"], threads=[1, 2])
+    marker = both.axes[0].containers[0]
+    assert to_rgba(marker.lines[0].get_color()) == to_rgba("#654321")
+    assert both.axes[0].get_lines()[-1].get_color() == "#123456"
+
+
+def test_spec_lone_interval_draws_an_error_bar(tmp_path, monkeypatch, capsys):
+    rows = [row("1a", n, f"{i + 1:02d}", (v,) * 7) for n, values in ((1, (5, 5, 5)), (2, (5, 5, 5)), (4, (2, 2, 5)), (6, (5, 5, 5)))
+            for i, v in enumerate(values)]
+    for method, high in (("t", 3 + 4.302653 * 3 ** 0.5 / 3 ** 0.5), ("resampled", 5)):
+        _, _, _, figures, _ = run(tmp_path, monkeypatch, capsys, rows, method=method)
+        fig = figures[f"latency_{MB1}_percentiles"]
+        ax = fig.axes[0]
+        assert not bands(ax)                       # no neighbour: no zero-width band
+        bar = ax.containers[0]
+        segment = bar.lines[2][0].get_segments()[0]
+        assert float(segment[0, 0]) == 4 and float(segment[:, 1].max()) == pytest.approx(high, abs=1e-3)
+        assert "Bands" in fig._suptitle.get_text()
+
+
+def test_unit_two_neighbours_are_a_band_and_a_lone_one_a_bar():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    nan = float("nan")
+    drawn = latency._draw_interval(ax, [1, 2, 4, 6, 8], np.array([9.0, 9, 9, 9, 9]), np.array([8.0, 8, nan, 8, nan]),
+                                   np.array([10.0, 10, nan, 10, nan]), "#123456")
+    assert drawn
+    assert sorted(band_ends(bands(ax)[0])) == [1.0, 2.0]
+    assert [float(s[0, 0]) for s in ax.containers[0].lines[2][0].get_segments()] == [6.0]
+
+
+def test_unit_nothing_known_draws_nothing():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    nan = float("nan")
+    assert not latency._draw_interval(ax, [1, 2], np.array([9.0, 9]), np.array([nan, nan]), np.array([nan, nan]), "k")
+    assert not bands(ax) and not ax.containers
+
+
+@pytest.mark.parametrize("stem", ["spectrum", "percentiles"])
+def test_spec_y_label_and_plain_ticks(tmp_path, monkeypatch, capsys, stem):
+    _, _, _, figures, _ = run(tmp_path, monkeypatch, capsys, group("1a", 1, [1, 2, 3]))
+    ax = figures[f"latency_{MB1}_{stem}"].axes[0]
+    assert ax.get_ylabel() == "Latency (ns per op, log scale)"
+    formatter = ax.yaxis.get_major_formatter()
+    assert isinstance(formatter, PlainLogFormatter) and formatter._num_to_string(1000.0, 1, 10000) == "1000"
+    assert isinstance(ax.yaxis.get_minor_formatter(), PlainLogFormatter)
+
+
+def test_spec_settings_must_agree_within_a_benchmark(config):
+    rows = [row("1a", 1, "01", forks="5"), row("1a", 1, "02", forks="3")]
+    with pytest.raises(ValueError, match="Incompatible settings in mb1_rawNoFinalize: forks"):
+        latency.normalize_sample(pd.DataFrame(rows), config)
 
 
 # ------------------------------------------------------------------------ log axis
@@ -416,8 +486,8 @@ def test_feature_raw3(tmp_path):
     assert len(paths) == 8
     table = pd.read_csv(next(p for p in paths if p.name == f"latency_{MB2}_avg.csv"), dtype={"strategy": str})
     # 8 strategies: base at N=1 and the 7 others at 5 thread counts.
-    assert table.shape[0] == 36 and set(table.n_reruns) == {3} and "2null" not in set(table.strategy)
     raw = pd.read_csv(RAW3, sep="\t", dtype=str, keep_default_na=False)
+    assert table.shape[0] == 36 and set(table.n_reruns) == {raw["rerun"].nunique()} and "2null" not in set(table.strategy)
     source = raw[raw["mode"].eq("sample") & raw["benchmark_short"].eq(MB2) & raw["strategy"].eq("2a")
                  & raw["threads_blobshuffle"].eq("8")]
     mean = source["p99"].astype(float).mean() * 1e6

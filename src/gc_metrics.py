@@ -34,11 +34,8 @@ BLANK_EFFECT = {"gc_time": "; gc_time_pct missing",
                 "aux_batches": "; batch_bytes and batch_fill missing"}
 ALLOC = "gc_alloc_rate_norm"
 ALLOC_CI = (f"{ALLOC}_ci_low", f"{ALLOC}_ci_high")
-ALLOC_T = (f"{ALLOC}_t_low", f"{ALLOC}_t_high")
 TIME_PCT = "gc_time_pct"
-TIME_PCT_T = (f"{TIME_PCT}_t_low", f"{TIME_PCT}_t_high")
 FILL = "batch_fill"
-FILL_T = (f"{FILL}_t_low", f"{FILL}_t_high")
 BATCH_FILL_BENCHMARK = "mb2_rawFinalize"
 AUX_UNITS = (re.compile(r"bytes/(ns|us|ms|s)"), re.compile(r"batches/(ns|us|ms|s)"))
 
@@ -168,7 +165,7 @@ def prepare(frame, config):
             "summary_kind": "mean of reruns",
         })
         record[ALLOC_CI[0]], record[ALLOC_CI[1]] = _alloc_ci(group, name, benchmark, strategy, threads)
-        ordered = group.sort_values("rerun", kind="stable")  # t interval only: independent of row order
+        ordered = group.sort_values("rerun", kind="stable")  # Intervals only: independent of row order
         for metric in AVERAGED:
             values = ordered[metric].to_numpy(dtype=float)
             low = high = np.nan

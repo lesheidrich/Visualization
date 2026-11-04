@@ -339,7 +339,7 @@ def test_table_step_warns_nothing_about_gc_time_t(tmp_path):
         _, averages = gc_metrics.prepare(pd.DataFrame(group("base", 1, [2, 2, 2])), config)
     assert [str(w.message) for w in caught if "t interval" in str(w.message)] == []
     assert len(averages) == 1
-    assert averages[list(gc_metrics.TIME_PCT_T)].isna().all(axis=None)
+    assert averages[["gc_time_pct_t_low", "gc_time_pct_t_high"]].isna().all(axis=None)
 
 
 # ------------------------------------------------------------------ help, README, constants
@@ -373,7 +373,6 @@ def test_strategy_docs_say_the_plot_exists():
 
 def test_constants():
     assert gc_metrics.TIME_PCT == "gc_time_pct"
-    assert gc_metrics.TIME_PCT_T == ("gc_time_pct_t_low", "gc_time_pct_t_high")
 
 
 # ------------------------------------------------------------------ raw3

@@ -99,7 +99,7 @@ strategy identifiers (trimmed lowercase, with a final `.0` removed), not labels.
 ## Plot samples
 
 `plot_samples/` holds example PNGs from a 3-rerun ledger, with no tables or ledger. They are not thesis
-results. Older compare folders keep the legend wording of their time. `preview_gc_time` is an older preview
+results. Older compare folders keep the legend wording of their time. The latency plots show `ci.method: t`. `preview_gc_time` is an older preview
 with an automatic y-axis; the real `gc_time_pct` plots are in `2026-11-03_09-05-42_gc_pauses`.
 
 ## Output names
@@ -364,7 +364,7 @@ requested or has no `batch_fill` mean, no file is written. The plot has no notes
 - `latency_<benchmark>_spectrum`: one panel per thread count, one line per strategy. The x axis places a percentile at
   minus log10 of one minus its fraction, and `100` one step after 99.99, which is a place on the axis and not a true distance.
 - `latency_<benchmark>_percentiles`: panels `p50`, `p95` and `p99` against BlobShuffle threads. A strategy with one thread count,
-  such as Base, is a marker with an error bar.
+  such as Base, is a marker with an error bar, and so is a lone interval whose neighbours have none.
 
 Both plots show the mean of reruns on a shared log y axis, with lines at alpha 1 and bands at alpha 0.3 from the method `ci.method`
 chooses; the title names it. There are no per-rerun plots. The axis bottom is the lowest mean divided by 1.25 and the top is the highest mean or upper

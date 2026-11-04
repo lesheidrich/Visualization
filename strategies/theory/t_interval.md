@@ -147,7 +147,8 @@ The owner decided this on 2026-11-02.
 | Throughput mean-of-reruns plots | 95% t interval of reruns | `t_low`, `t_high` |
 | `gc_alloc_rate_norm` mean-of-reruns plots | 95% t interval of reruns | `gc_alloc_rate_norm_t_low`, `gc_alloc_rate_norm_t_high` |
 | `batch_fill` mean-of-reruns plot, `mb2_rawFinalize` only | 95% t interval of reruns | `batch_fill_t_low`, `batch_fill_t_high` |
-| Tables, for testing and sanity checks | 95% percentile bootstrap | `ci_low`, `ci_high` (and `gc_alloc_rate_norm_ci_low`, `gc_alloc_rate_norm_ci_high`) |
+| Tables, and plots with `ci.method: resampled` | 95% percentile bootstrap | `ci_low`, `ci_high` and `<metric>_ci_low`, `<metric>_ci_high` |
+| Latency mean-of-reruns plots | The method `ci.method` picks, as bands | `<p>_t_low`, `<p>_t_high`, `<p>_ci_low`, `<p>_ci_high` |
 | GC `_avg` tables, every averaged metric | 95% t interval of reruns, drawn for `gc_alloc_rate_norm`, `gc_time_pct` and, for `mb2_rawFinalize`, `batch_fill` | `<metric>_t_low`, `<metric>_t_high` (blank without spread or with a blank contributor) |
 | Speedup mean-of-reruns plots | 95% paired Fieller interval | `fieller_low`, `fieller_high` |
 | Speedup tables, for checks | paired resampled CI, and t on the per-rerun ratios | `ci_low`, `ci_high`, `t_low`, `t_high` |

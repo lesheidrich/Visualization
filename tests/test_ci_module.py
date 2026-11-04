@@ -21,6 +21,7 @@ ROOT = Path(__file__).parents[1]
 RAW3 = ROOT / "docs" / "raw3.csv"
 T_TITLE = "95% t interval of reruns"
 RESAMPLED_TITLE = "95% percentile bootstrap of reruns"
+TEN = [1, 2, 3.5, 5, 9, 11, 14, 17, 23, 31]  # Ten distinct reruns: the resampled CI depends on seed and order.
 HALF_1_1_4 = 4.302653 * 3 ** 0.5 / 3 ** 0.5  # t(2) * SD sqrt(3) / sqrt(3) = 4.302653
 
 
@@ -250,10 +251,11 @@ def test_unit_gc_new_columns_blank_without_spread_and_silent(tmp_path, monkeypat
 
 
 def test_unit_gc_new_columns_use_the_metric_seed(config):
-    rows = pd.DataFrame(gc_rows("base", 1, [1, 2, 3.5, 5, 9]))
+    rows = pd.DataFrame(gc_rows("base", 1, TEN))
     _, averages = gc_metrics.prepare(rows, config)
-    expected = ci.bootstrap_ci([1, 2, 3.5, 5, 9], seed=ci.cell_seed(MB1, "base", 1, "gc_time_pct"))
-    assert (averages.gc_time_pct_ci_low[0], averages.gc_time_pct_ci_high[0]) == pytest.approx(expected, abs=1e-9)
+    expected = ci.bootstrap_ci(TEN, seed=ci.cell_seed(MB1, "base", 1, "gc_time_pct"))
+    assert (averages.gc_time_pct_ci_low[0], averages.gc_time_pct_ci_high[0]) == pytest.approx(expected, abs=1e-5)
+    assert ci.bootstrap_ci(TEN, seed=ci.cell_seed(MB1, "base", 1)) != pytest.approx(expected, abs=1e-5)
 
 
 def test_unit_gc_score_resampled_matches_throughput_table(config):
@@ -264,10 +266,11 @@ def test_unit_gc_score_resampled_matches_throughput_table(config):
 
 
 def test_integration_gc_row_order_does_not_change_new_columns(config):
-    rows = gc_rows("base", 1, [1, 2, 3.5, 5, 9])
+    rows = gc_rows("base", 1, TEN)
     _, one = gc_metrics.prepare(pd.DataFrame(rows), config)
     _, two = gc_metrics.prepare(pd.DataFrame(rows[::-1]), config)
     assert one.gc_time_pct_ci_low[0] == two.gc_time_pct_ci_low[0]
+    assert one.gc_time_pct_ci_high[0] == two.gc_time_pct_ci_high[0]
 
 
 @pytest.mark.parametrize("stem, rows", [

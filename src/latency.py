@@ -165,6 +165,23 @@ def _series(data, columns, method, bottom):
     return means, np.where(np.isnan(lows), np.nan, np.maximum(lows, bottom)), highs
 
 
+def _draw_interval(ax, x, means, lows, highs, colour):
+    """Band over runs of neighbouring intervals, error bar on a lone one. True if anything shows."""
+    x = np.asarray(x, dtype=float)
+    known = np.isfinite(lows) & np.isfinite(means)
+    before = np.r_[False, known[:-1]]
+    after = np.r_[known[1:], False]
+    alone = known & ~before & ~after
+    if alone.any():
+        error = np.maximum(np.vstack([means[alone] - lows[alone], highs[alone] - means[alone]]), 0)
+        ax.errorbar(x[alone], means[alone], yerr=error, fmt="none", ecolor=colour, capsize=4, zorder=3)
+    joined = known & ~alone
+    if joined.any():
+        ax.fill_between(x, np.where(joined, lows, np.nan), np.where(joined, highs, np.nan), color=colour,
+                        alpha=BAND_ALPHA, linewidth=0, zorder=2)
+    return bool(known.any())
+
+
 def _colour(config, strategy, position, palette):
     return config.colors.get(strategy, palette(position % 10))
 
@@ -175,7 +192,7 @@ def _finish(fig, axes, config, strategies, palette, present, title, drawn, ylabe
     for ax in axes:
         ax.set_yscale("log")
         ax.yaxis.set_major_formatter(PlainLogFormatter(labelOnlyBase=False))
-        ax.yaxis.set_minor_formatter(PlainLogFormatter(labelOnlyBase=False, minor_thresholds=(2, 0.4)))
+        ax.yaxis.set_minor_formatter(PlainLogFormatter(labelOnlyBase=False, minor_thresholds=(3, 1.3)))
         ax.grid(color="#ddd", zorder=0)
         ax.spines[["top", "right"]].set_visible(False)
     ylabel_axis.set_ylabel("Latency (ns per op, log scale)")
@@ -214,9 +231,7 @@ def render_spectrum(averages, config, benchmark, *, strategies, threads):
             present.add(strategy)
             ax.plot(X_POSITIONS, means[0], marker="o", markersize=4, linewidth=1.8, color=colour, alpha=LINE_ALPHA,
                     zorder=3)
-            if np.isfinite(lows).any():
-                ax.fill_between(X_POSITIONS, lows[0], highs[0], color=colour, alpha=BAND_ALPHA, linewidth=0, zorder=2)
-                drawn = True
+            drawn = _draw_interval(ax, X_POSITIONS, means[0], lows[0], highs[0], colour) or drawn
         ax.set_title(f"N = {n}")
         ax.set_xticks(X_POSITIONS, TICK_LABELS, rotation=45, fontsize=8)
         ax.set_xlabel("Percentile")
@@ -251,15 +266,13 @@ def render_percentiles(averages, config, benchmark, *, strategies, threads):
             present.add(strategy)
             if len(x) == 1:
                 error = None
-                if np.isfinite(lows[0]):
+                if np.isfinite(lows[0]) and np.isfinite(means[0]):
                     error = [[max(means[0] - lows[0], 0)], [max(highs[0] - means[0], 0)]]
                     drawn = True
                 ax.errorbar(x, means, yerr=error, fmt="o", markersize=5, color=colour, capsize=4, zorder=3)
             else:
                 ax.plot(x, means, marker="o", markersize=4, linewidth=1.8, color=colour, alpha=LINE_ALPHA, zorder=3)
-                if np.isfinite(lows).any():
-                    ax.fill_between(x, lows, highs, color=colour, alpha=BAND_ALPHA, linewidth=0, zorder=2)
-                    drawn = True
+                drawn = _draw_interval(ax, x, means, lows, highs, colour) or drawn
         ax.set_title(column)
         ax.set_xticks(threads)
         ax.set_xlabel("BlobShuffle threads")

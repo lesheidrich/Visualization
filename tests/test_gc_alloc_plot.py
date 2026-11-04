@@ -28,7 +28,7 @@ BENCH2 = "mb2_rawFinalize"
 ROOT = Path(__file__).parents[1]
 SAMPLE = ROOT / "docs" / "jmh_sample.csv"
 CI_LOW, CI_HIGH = ALLOC_CI
-T_LOW, T_HIGH = gc_metrics.ALLOC_T
+T_LOW, T_HIGH = "gc_alloc_rate_norm_t_low", "gc_alloc_rate_norm_t_high"
 
 
 @pytest.fixture(autouse=True)

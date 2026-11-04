@@ -1,6 +1,6 @@
 # Plots and tables
 
-What we are building and where each piece stands. There are four features, and all the GC-style metrics live in one table.
+What we are building and where each piece stands. There are five features, and all the GC-style metrics live in one table.
 
 **Status marks**
 
@@ -36,6 +36,9 @@ We never average CI bounds.
 | | | Plot across reruns | ✓ | Line is a ratio of means, mean(strategy) / mean(base). Error bars are the 95% paired Fieller interval (`fieller_low`, `fieller_high`). The resampled CI (`ci_low`, `ci_high`) and the t interval on the per-rerun ratios (`t_low`, `t_high`) are in the CSV for checks, not drawn. |
 | 4 | 2A vs 2B comparison | Table | ✓ | Done: `uv run compare` (`add-2a-2b-comparison`). Paired log-t intervals at 99% and 98% (five thread counts), the smallest provable margin and a verdict per thread count. Research in [comparison_2a_2b.md](comparison_2a_2b.md). |
 | | | Plot of the ratio | ✓ | Done: `uv run compare` also saves `compare_<benchmark>_ratio` (`add-compare-plot`): per thread count a dot at `logt_ratio`, a thick bar for the equivalence interval, a thin bar for the difference interval, and lines at 1 and at the margin. Drawn from the same table; the CSV is unchanged. |
+
+| 5 | Tail latency | Two tables | ✓ | `uv run latency` (`add-tail-latency`). Per rerun, and mean of reruns with both CI methods, from `sample` rows. |
+| | | Two plots | ✓ | Percentile spectrum per thread count, and `p50`, `p95`, `p99` against threads. Log axis, line alpha 1, bands of `ci.method` at alpha 0.3. |
 
 **Excluded strategy:** on 2026-11-03 the owner said "we're removing 2_0 from visualization". S2_0 (ledger key `2null`) is set in `config.yaml` as `strategies.exclude: [2null]`, so none of the four commands draws or tabulates it. `total_reruns` then counts only reruns of the kept strategies, so a rerun or thread count held only by S2_0 disappears; neither happens in `docs/raw3.csv`. The ledger keeps its rows, and the other strategies keep their values.
 
