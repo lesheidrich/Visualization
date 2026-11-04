@@ -17,7 +17,7 @@ from matplotlib.collections import LineCollection
 from conftest import gc_observation, observation
 from src import cli, compare, gc_metrics, speedup, thrpt
 from src.config import Config
-from src.utils import FIELLER_METHOD, T_METHOD, fieller_interval
+from src.ci import FIELLER_METHOD, T_METHOD, fieller_interval
 
 BENCH = "mb1_rawNoFinalize"
 BENCH2 = "mb2_rawFinalize"
@@ -342,11 +342,11 @@ def test_integration_speedup_avg_csv_gains_only_the_two_fieller_columns(cfg):
     assert base.speedup == 1 and base[["fieller_low", "fieller_high", "ci_low", "t_low"]].isna().all()
 
 
-def test_integration_gc_avg_csv_gains_only_t_columns(cfg):
+def test_integration_gc_avg_csv_gains_t_then_resampled_columns(cfg):
     pd.DataFrame(ten_rerun_rows(extra_strategies=False)).to_csv(cfg.ledger, index=False)
     paths = gc_metrics.run(cfg)
     table = pd.read_csv(next(p for p in paths if p.name.endswith("_avg.csv")), dtype={"strategy": str})
-    assert table.columns.tolist() == GC_COLUMNS_BEFORE + GC_T_COLUMNS
+    assert table.columns.tolist() == GC_COLUMNS_BEFORE + GC_T_COLUMNS + [f"{m}_ci_{e}" for m in gc_metrics.AVERAGED if m != "gc_alloc_rate_norm" for e in ("low", "high")]
     base = table[table.strategy.eq("base")].iloc[0]
     assert (base.gc_count_t_low, base.gc_count_t_high) == pytest.approx((123.34, 166.66), abs=0.01)
     assert (base.gc_alloc_rate_norm, base.gc_alloc_rate_norm_t_low, base.gc_alloc_rate_norm_t_high) == \

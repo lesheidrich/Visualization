@@ -31,7 +31,7 @@ Reruns stay on one machine. These edits only change which level counts as one sa
 |---|---|---|
 | Error bars on across-reruns throughput, `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` (mb2 only) plots | 95% t interval of the rerun means | Kalibera & Jones 2013 §9.3: [38] |
 | Error bars on across-reruns speedup plots | 95% paired Fieller interval of the ratio of means | Fieller 1954 (to add); von Luxburg & Franz 2009 (to add) |
-| Kept in the tables as a check, not drawn | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
+| Kept in the tables as a check, drawn only if `ci.method` is `resampled` | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
 
 Per-rerun throughput plots keep the ledger's CI, and `pauses_max` has no CI.
 

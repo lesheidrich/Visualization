@@ -12,8 +12,8 @@ from conftest import gc_observation, observation
 from src.config import load_config
 from src.speedup import prepare as speedup_prepare
 from src.gc_metrics import prepare as gc_prepare
-from src.utils import (fieller_interval, has_spread, load_ledger, normalize_throughput, t_interval,
-                       t_quantile, validate_comparability, warn_incomplete)
+from src.ci import fieller_interval, has_spread, t_interval, t_quantile
+from src.utils import load_ledger, normalize_throughput, validate_comparability, warn_incomplete
 
 
 # ---- config ------------------------------------------------------------------------------

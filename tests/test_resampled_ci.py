@@ -18,7 +18,7 @@ from matplotlib.colors import to_rgba
 
 from conftest import observation
 from src import speedup, thrpt
-from src.utils import (bootstrap_ci, cell_seed, has_spread, t_interval, t_quantile)
+from src.ci import (bootstrap_ci, cell_seed, has_spread, t_interval, t_quantile)
 
 METHOD = "95% percentile bootstrap of reruns"
 T_METHOD = "95% t interval of reruns"

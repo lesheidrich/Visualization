@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import LogFormatter
 
-from .utils import (ALL_RERUNS_PART, AVERAGE_PART, T_METHOD, bootstrap_ci,
-                    cell_seed, duration_seconds, file_names, has_spread, load_ledger, t_interval,
+from .ci import T, bootstrap_ci, cell_seed, has_spread, interval_columns, method_name, method_title, t_interval
+from .utils import (ALL_RERUNS_PART, AVERAGE_PART, duration_seconds, file_names, load_ledger,
                     normalize_throughput, numeric, output_directory, output_stem, save_figure,
                     sorted_for_csv, strategy_order, warn, warn_incomplete)
 
@@ -176,6 +176,14 @@ def prepare(frame, config):
             if not np.isnan(values).any() and has_spread(values):
                 low, high = t_interval(values)
             record[f"{metric}_t_low"], record[f"{metric}_t_high"] = low, high
+        for metric in AVERAGED:  # After every older column, so those keep their places.
+            if metric == ALLOC:
+                continue
+            values = ordered[metric].to_numpy(dtype=float)
+            low = high = np.nan
+            if not np.isnan(values).any() and has_spread(values):
+                low, high = bootstrap_ci(values, seed=cell_seed(benchmark, strategy, threads, metric))
+            record[f"{metric}_ci_low"], record[f"{metric}_ci_high"] = low, high
         records.append(record)
     return observations, pd.DataFrame.from_records(records)
 
@@ -295,9 +303,8 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
     return fig
 
 
-def _render_bars(averages, config, *, strategies, threads, metric, t_columns, title, ylabel,
-                 min_top=None):
-    """Bars of the mean of reruns of `metric` with t interval error bars from `t_columns`.
+def _render_bars(averages, config, *, strategies, threads, metric, title, ylabel, min_top=None):
+    """Bars of the mean of reruns of `metric` with error bars of the method `ci.method` chooses.
 
     `min_top` raises the automatic axis top to at least that value; the bottom is always 0."""
     import matplotlib
@@ -313,6 +320,7 @@ def _render_bars(averages, config, *, strategies, threads, metric, t_columns, ti
     slots = _compact_slots(
         strategies, threads,
         lambda s, n: (known["strategy"].eq(s) & known["threads_blobshuffle"].eq(n)).any(), width)
+    low, high = interval_columns(config.ci_method, metric)
     bars = 0
     for k, strategy in enumerate(strategies):
         data = known[known["strategy"].eq(strategy)].sort_values("threads_blobshuffle")
@@ -321,17 +329,18 @@ def _render_bars(averages, config, *, strategies, threads, metric, t_columns, ti
         x = np.array([slots[(strategy, n)] for n in data["threads_blobshuffle"]])
         ax.bar(x, data[metric], width=width, color=config.colors.get(strategy, palette(k % 10)),
                edgecolor="white", label=config.labels.get(strategy, strategy), zorder=2)
-        complete = (data[t_columns[0]].notna() & data[t_columns[1]].notna()).to_numpy()
+        complete = (data[low].notna() & data[high].notna()).to_numpy()
         if complete.any():
             valid = data[complete]
-            err = np.vstack([valid[metric] - valid[t_columns[0]], valid[t_columns[1]] - valid[metric]])
+            # Never negative: a resampled bound need not surround the mean.
+            err = np.maximum(np.vstack([valid[metric] - valid[low], valid[high] - valid[metric]]), 0)
             ax.errorbar(x[complete], valid[metric], yerr=err, fmt="none", color="#444",
                         elinewidth=1.5, capsize=4, zorder=3)
             bars += int(complete.sum())
     ax.set_xticks(np.arange(len(threads)), threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel(ylabel)
-    ax.set_title(f"{title}\nError bars: {T_METHOD}" if bars else title)
+    ax.set_title(f"{title}\nError bars: {method_title(config.ci_method)}" if bars else title)
     ax.margins(y=0.05)
     ax.set_yscale("linear")
     ax.set_ylim(bottom=0)
@@ -346,34 +355,35 @@ def _render_bars(averages, config, *, strategies, threads, metric, t_columns, ti
 
 
 def render_alloc(averages, config, benchmark, *, strategies, threads):
-    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with 95% t interval error bars."""
+    """Bars of the mean of reruns of gc_alloc_rate_norm (B/op) with error bars of the chosen method."""
     return _render_bars(averages, config, strategies=strategies, threads=threads, metric=ALLOC,
-                        t_columns=ALLOC_T, ylabel=f"{ALLOC} (B/op)",
+                        ylabel=f"{ALLOC} (B/op)",
                         title=f"{benchmark} \u2014 {ALLOC}, mean of reruns")
 
 
 def render_batch_fill(averages, config, benchmark, *, strategies, threads):
-    """Bars of the mean of reruns of batch_fill, axis from 0 to at least 1, with 95% t interval error bars."""
+    """Bars of the mean of reruns of batch_fill, axis from 0 to at least 1, with error bars of the chosen method."""
     return _render_bars(averages, config, strategies=strategies, threads=threads, metric=FILL,
-                        t_columns=FILL_T, min_top=1, ylabel=f"{FILL} (batch_bytes / cfg_batchDesiredBytes)",
+                        min_top=1, ylabel=f"{FILL} (batch_bytes / cfg_batchDesiredBytes)",
                         title=f"{benchmark} \u2014 {FILL}, mean of reruns")
 
 
-def _warn_without_interval(averages, benchmark, metric, t_columns):
+def _warn_without_interval(averages, benchmark, metric, method):
+    low, high = interval_columns(method, metric)
     for _, row in averages[averages["benchmark_short"].eq(benchmark)].iterrows():
-        if pd.notna(row[metric]) and (pd.isna(row[t_columns[0]]) or pd.isna(row[t_columns[1]])):
-            warn(f"No {metric} t interval for {benchmark}/{row['strategy']}/"
+        if pd.notna(row[metric]) and (pd.isna(row[low]) or pd.isna(row[high])):
+            warn(f"No {metric} {method_name(method)} for {benchmark}/{row['strategy']}/"
                  f"threads={row['threads_blobshuffle']}: fewer than two reruns or no spread")
 
 
-def warn_batch_fill_without_interval(averages, benchmark):
-    """One warning per group with a batch_fill mean but no t interval (plot step only)."""
-    _warn_without_interval(averages, benchmark, FILL, FILL_T)
+def warn_batch_fill_without_interval(averages, benchmark, method=T):
+    """One warning per group with a batch_fill mean but no interval of the method (plot step only)."""
+    _warn_without_interval(averages, benchmark, FILL, method)
 
 
-def warn_gc_time_without_interval(averages, benchmark):
-    """One warning per group with a gc_time_pct mean but no t interval (plot step only)."""
-    _warn_without_interval(averages, benchmark, TIME_PCT, TIME_PCT_T)
+def warn_gc_time_without_interval(averages, benchmark, method=T):
+    """One warning per group with a gc_time_pct mean but no interval of the method (plot step only)."""
+    _warn_without_interval(averages, benchmark, TIME_PCT, method)
 
 
 def rounded_top(highest):
@@ -391,14 +401,15 @@ def rounded_top(highest):
 
 
 def render_gc_time(averages, config, benchmark, *, strategies, threads):
-    """Bars of the mean of reruns of gc_time_pct (%) with 95% t interval error bars; axis top rounded up."""
+    """Bars of the mean of reruns of gc_time_pct (%) with error bars of the chosen method; axis top rounded up."""
     fig = _render_bars(averages, config, strategies=strategies, threads=threads, metric=TIME_PCT,
-                       t_columns=TIME_PCT_T, ylabel=f"{TIME_PCT} (%)",
+                       ylabel=f"{TIME_PCT} (%)",
                        title=f"{benchmark} \u2014 {TIME_PCT}, mean of reruns")
     known = averages[averages[TIME_PCT].notna()]
     drawn = known[TIME_PCT].tolist()
-    complete = known[TIME_PCT_T[0]].notna() & known[TIME_PCT_T[1]].notna()
-    drawn += known.loc[complete, TIME_PCT_T[1]].tolist()
+    low, high = interval_columns(config.ci_method, TIME_PCT)
+    complete = known[low].notna() & known[high].notna()
+    drawn += known.loc[complete, high].tolist()
     fig.axes[0].set_ylim(bottom=0, top=rounded_top(max(drawn)))
     return fig
 
@@ -448,7 +459,7 @@ def run(config):
             plt.close(fig)
         bench_averages = averages[averages["benchmark_short"].eq(benchmark)]
         if bench_averages[TIME_PCT].notna().any():
-            warn_gc_time_without_interval(bench_averages, benchmark)
+            warn_gc_time_without_interval(bench_averages, benchmark, config.ci_method)
             fig = render_gc_time(bench_averages, config, benchmark,
                                  strategies=strategy_order(data, config),
                                  threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))
@@ -459,7 +470,7 @@ def run(config):
             finally:
                 plt.close(fig)
         if benchmark == BATCH_FILL_BENCHMARK and bench_averages[FILL].notna().any():
-            warn_batch_fill_without_interval(bench_averages, benchmark)
+            warn_batch_fill_without_interval(bench_averages, benchmark, config.ci_method)
             fig = render_batch_fill(bench_averages, config, benchmark,
                                     strategies=strategy_order(data, config),
                                     threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))

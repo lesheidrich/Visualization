@@ -6,8 +6,9 @@ import math
 import numpy as np
 import pandas as pd
 
-from .utils import (row_tag, run_tag, bootstrap_ci, cell_seed, file_names, has_spread, load_ledger,
-                    normalize_throughput, output_directory, output_stem, save_figure, t_quantile, warn,
+from .ci import bootstrap_ci, cell_seed, has_spread, t_quantile
+from .utils import (row_tag, run_tag, file_names, load_ledger,
+                    normalize_throughput, output_directory, output_stem, save_figure, warn,
                     AVERAGE_PART)
 
 FAMILY_ALPHA = 0.05

@@ -26,6 +26,13 @@ plot:
   figsize: [12, 6]
   dpi: 150
   show: false
+# Which confidence interval the mean-of-reruns plots draw. Tables always hold both.
+#   t         - 95% t interval of reruns
+#   resampled - 95% percentile bootstrap of reruns
+# Speedup plots always draw the paired Fieller interval and compare always uses paired log-t,
+# so they ignore this setting. Per-rerun throughput plots keep the ledger's 99.9% bounds.
+ci:
+  method: t
 # Every rerun is included. Throughput uses the mean of reruns; speedup uses the ratio of mean scores.
 # 2A vs 2B equivalence margin, as a fraction: 0.05 means the two count as the same when the
 # interval for 2A/2B lies inside 1/1.05 to 1.05. It was fixed on 2026-11-01, while the final

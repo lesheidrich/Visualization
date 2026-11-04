@@ -6,13 +6,15 @@ import yaml
 
 
 def write_run(tmp_path, rows, benchmarks=("mb1_rawNoFinalize",), formats=("png",), margin=None,
-              labels=None):
+              labels=None, ci_method=None):
     """Write ledger.csv (rows in the given order) and config.yaml; return the config path."""
     pd.DataFrame(rows).to_csv(tmp_path / "ledger.csv", index=False)
     settings = {"input": {"path": "ledger.csv"}, "output": {"directory": "out", "formats": list(formats)},
                 "benchmarks": list(benchmarks), "plot": {"figsize": [5, 3], "dpi": 40}}
     if margin is not None:
         settings["comparison"] = {"margin": margin}
+    if ci_method is not None:
+        settings["ci"] = {"method": ci_method}
     if labels:
         settings["strategies"] = {"labels": labels}
     path = tmp_path / "config.yaml"

@@ -153,7 +153,7 @@ The owner decided this on 2026-11-02.
 | Speedup tables, for checks | paired resampled CI, and t on the per-rerun ratios | `ci_low`, `ci_high`, `t_low`, `t_high` |
 | Single-rerun throughput bars | JMH's own 99.9% bounds from the ledger | `score_confidence_low`, `score_confidence_high` |
 
-**Status: built** (OpenSpec change `plot-t-intervals`). The mean-of-reruns plots draw the columns in the table. The t interval function is `t_interval` in `src/utils.py` and the Fieller function is `fieller_interval` there. Bar heights and all means are unchanged, and the bootstrap columns stay in the tables, for checks only.
+**Status: built** (OpenSpec change `plot-t-intervals`). The mean-of-reruns plots draw the columns in the table. The t interval function is `t_interval` in `src/ci.py` and the Fieller function is `fieller_interval` there. Since `add-ci-module`, `ci.method: resampled` draws the bootstrap instead on the throughput and GC bar plots. Bar heights and all means are unchanged, and the bootstrap columns stay in the tables.
 
 **Why speedup is different.** The plotted point of speedup is a ratio of means, not a plain mean. The t formula is for a plain mean, so it can't go straight on a ratio. Paired Fieller is the t version for a ratio. It finds every ratio θ for which a t interval on (strategy − θ × base), across the reruns, contains zero. It uses the same t value and keeps each strategy score paired with its base score from the same rerun. The bar then matches the plotted point. Sources: Fieller, JRSS B, 1954, https://doi.org/10.1111/j.2517-6161.1954.tb00159.x ; von Luxburg & Franz, Statistica Sinica 19(3), 2009, https://arxiv.org/pdf/0711.0198 .
 

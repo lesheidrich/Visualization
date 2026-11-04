@@ -16,9 +16,9 @@ What we are building and where each piece stands. There are four features, and a
 |---|---|
 | Rerun value | The one number a rerun gives for a strategy, thread count and metric. |
 | Mean of reruns | The mean of those rerun values. This is the bar height. |
-| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput, `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` (mb2 only) mean-of-reruns plots. |
+| t interval of reruns | The 95% interval mean -/+ t * s / sqrt(n) of the rerun values. This is the error bar on throughput, `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` (mb2 only) mean-of-reruns plots with `ci.method: t`, the default (`add-ci-module`). |
 | Paired Fieller interval | The t-based interval for a ratio of means that keeps each strategy score with its base score from the same rerun. This is the error bar on speedup mean-of-reruns plots. |
-| Resampled CI | A 95% percentile bootstrap of the rerun values. It stays in the tables for tests and sanity checks and is not drawn. |
+| Resampled CI | A 95% percentile bootstrap of the rerun values. It is always in the tables, and those same plots draw it with `ci.method: resampled`. |
 
 The resampling method is documented in [resampling.md](resampling.md), and the thesis changes it needs in [notes_for_thesis.md](notes_for_thesis.md).
 
@@ -29,7 +29,7 @@ We never average CI bounds.
 | # | Feature | Part | Status | Notes |
 |---|---|---|---|---|
 | 1 | Throughput | Plot per rerun | ✓ | `uv run thrpt`. Error bars are the ledger CI of that rerun. |
-| | | Plot across reruns | ✓ | Bars are the mean of reruns. Error bars are the 95% t interval (`t_low`, `t_high`). The resampled CI (`ci_low`, `ci_high`) is in the CSV for checks, not drawn. |
+| | | Plot across reruns | ✓ | Bars are the mean of reruns. Error bars follow `ci.method`: the 95% t interval (`t_low`, `t_high`, default) or the resampled CI (`ci_low`, `ci_high`). The CSV holds both. |
 | 2 | GC and co | One table | See below | `uv run gc`. |
 | | | Plots from that table | See below | |
 | 3 | Speedup | Plot per rerun | ✓ | `uv run speedup`. Values only, no CI possible. |

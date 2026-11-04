@@ -4,9 +4,10 @@ import json
 import numpy as np
 import pandas as pd
 
-from .utils import (BOOTSTRAP_RESAMPLES, CI_METHOD, bootstrap_ci, cell_seed, has_spread,
-                    AVERAGE_PART, FIELLER_METHOD, fieller_interval, file_names, load_ledger, normalize_throughput, output_directory,
-                    output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, run_tag, t_interval, warn, warn_incomplete)
+from .ci import (BOOTSTRAP_RESAMPLES, CI_METHOD, FIELLER_METHOD, bootstrap_ci, cell_seed, fieller_interval,
+                 has_spread, t_interval)
+from .utils import (AVERAGE_PART, file_names, load_ledger, normalize_throughput, output_directory,
+                    output_stem, rerun_part, save_figure, sorted_for_csv, strategy_order, run_tag, warn, warn_incomplete)
 
 
 def prepare(frame, config):
