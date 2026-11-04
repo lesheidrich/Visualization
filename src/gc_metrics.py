@@ -5,10 +5,9 @@ from decimal import Decimal
 
 import numpy as np
 import pandas as pd
-from matplotlib.ticker import LogFormatter
 
 from .ci import T, bootstrap_ci, cell_seed, has_spread, interval_columns, method_name, method_title, t_interval
-from .utils import (ALL_RERUNS_PART, AVERAGE_PART, duration_seconds, file_names, load_ledger,
+from .utils import (ALL_RERUNS_PART, AVERAGE_PART, PlainLogFormatter, duration_seconds, file_names, load_ledger,
                     normalize_throughput, numeric, output_directory, output_stem, save_figure,
                     sorted_for_csv, strategy_order, warn, warn_incomplete)
 
@@ -248,13 +247,6 @@ def _compact_slots(strategies, threads, present, width):
     return slots
 
 
-class _PlainLogFormatter(LogFormatter):
-    """Log tick labels as plain numbers (no scientific or mathtext notation)."""
-
-    def _num_to_string(self, x, vmin, vmax):
-        return f"{x:g}"
-
-
 def render_pauses(observations, medians, config, title, *, strategies, threads):
     """One dot per rerun with a median line per strategy and thread count."""
     import matplotlib
@@ -290,8 +282,8 @@ def render_pauses(observations, medians, config, title, *, strategies, threads):
     handles.append(Line2D([], [], color="black", linewidth=2,
                           label="median (per strategy and threads)"))
     ax.set_yscale("log")
-    ax.yaxis.set_major_formatter(_PlainLogFormatter(labelOnlyBase=False))
-    ax.yaxis.set_minor_formatter(_PlainLogFormatter(labelOnlyBase=False, minor_thresholds=(2, 0.4)))
+    ax.yaxis.set_major_formatter(PlainLogFormatter(labelOnlyBase=False))
+    ax.yaxis.set_minor_formatter(PlainLogFormatter(labelOnlyBase=False, minor_thresholds=(2, 0.4)))
     ax.set_xticks(np.arange(len(threads)), threads)
     ax.set_xlabel("BlobShuffle threads")
     ax.set_ylabel("pauses_max (ms, log scale)")

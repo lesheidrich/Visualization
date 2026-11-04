@@ -18,6 +18,7 @@ uv run thrpt
 uv run speedup
 uv run gc
 uv run compare
+uv run latency
 uv run pytest
 ```
 
@@ -60,7 +61,7 @@ strategies cover 1, 2, 4, 6, and 8 threads. Its original 70-column schema is ret
 Every row is marked `SYNTHETIC` in provenance fields. These invented values are
 software test data, including their supplied bounds and auxiliary metrics; they
 do not establish performance rankings or valid statistical confidence intervals.
-All of `uv run thrpt`, `speedup`, `gc` and `compare` work with the supplied configuration and sample.
+All of `uv run thrpt`, `speedup`, `gc` and `compare` work with the supplied configuration and sample; `latency` needs `sample` rows, which it lacks.
 `docs/` is not in the repository (it is gitignored), so a clone has no sample ledger: set `input.path` in `config.yaml` to your own ledger.
 
 ## Ledger input
@@ -349,6 +350,26 @@ at 0. A group with a mean but no t interval (fewer than two reruns, or no spread
 error bar and one warning naming it; a group without a mean has no bar and no such warning. No
 other benchmark gets this plot, `mb1_rawNoFinalize` included. If `mb2_rawFinalize` is not
 requested or has no `batch_fill` mean, no file is written. The plot has no notes.
+
+## Tail latency
+
+`uv run latency` reads only `sample` rows, never joins them to `thrpt` rows, and saves into a new
+`<timestamp>_latency/` folder. A configured benchmark with no `sample` rows stops the command, so the supplied synthetic
+`docs/jmh_sample.csv` does not work with it. Percentiles are converted to ns per op from `score_unit` (`ns/op`, `us/op`, `ms/op` or `s/op`).
+`p99_999` and `p99_9999` are left out: on `docs/raw3.csv` they nearly always equal `p100`.
+
+- `latency_<benchmark>_r_all.csv`: one row per rerun, with `p50`, `p90`, `p95`, `p99`, `p99_9`, `p99_99` and `p100`.
+- `latency_<benchmark>_avg.csv`: per strategy and thread count, the mean of reruns of each percentile, with `<p>_t_low`,
+  `<p>_t_high`, `<p>_ci_low` and `<p>_ci_high`. Bootstrap seeds come from benchmark, strategy, threads and `latency_<p>`.
+- `latency_<benchmark>_spectrum`: one panel per thread count, one line per strategy. The x axis places a percentile at
+  minus log10 of one minus its fraction, and `100` one step after 99.99, which is a place on the axis and not a true distance.
+- `latency_<benchmark>_percentiles`: panels `p50`, `p95` and `p99` against BlobShuffle threads. A strategy with one thread count,
+  such as Base, is a marker with an error bar.
+
+Both plots show the mean of reruns on a shared log y axis, with lines at alpha 1 and bands at alpha 0.3 from the method `ci.method`
+chooses; the title names it. There are no per-rerun plots. The axis bottom is the lowest mean divided by 1.25 and the top is the highest mean or upper
+end times 1.25. A low end under the bottom is drawn at the bottom, and a low end at or below zero also warns; the table keeps the true value.
+Values near 26 to 30 ns are close to the cost of the timer itself, so don't read them as exact.
 
 ## 2A vs 2B comparison
 

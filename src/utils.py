@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import LogFormatter
 
 
 AVERAGE_PART = "avg"
@@ -17,6 +18,13 @@ ALL_RERUNS_PART = "r_all"
 
 
 _MAX_FIELD_CHARS = 2**31 - 1
+
+
+class PlainLogFormatter(LogFormatter):
+    """Log tick labels as plain numbers (no scientific or mathtext notation)."""
+
+    def _num_to_string(self, x, vmin, vmax):
+        return f"{x:g}"
 
 
 def warn(message):
@@ -35,10 +43,10 @@ def row_tag(row):
     return tag if tag.endswith(built) else built
 
 
-def warn_incomplete(benchmark, strategy, threads, group, all_reruns):
+def warn_incomplete(benchmark, strategy, threads, group, all_reruns, mode="thrpt"):
     """One readable warning per rerun that a group lacks."""
     for rerun in sorted(set(all_reruns) - set(group["rerun"])):
-        warn(f"{benchmark}/{run_tag(strategy, threads, rerun)}/thrpt missing.")
+        warn(f"{benchmark}/{run_tag(strategy, threads, rerun)}/{mode} missing.")
 
 
 def sorted_for_csv(table, config):

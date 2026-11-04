@@ -56,9 +56,9 @@ One row per benchmark, strategy, thread count and rerun, plus the mean of reruns
 | `batch_fill` | `thrpt` | ✓ | ✓ | Yes: `add-batch-fill-plot`, `mb2_rawFinalize` only. Bars are the mean of reruns on a linear axis from zero, with its top at the larger of 1 and the automatic top. Error bars are the 95% t interval, in the `_avg` CSV as `batch_fill_t_low` and `_t_high`. |
 | `batch_bytes` | `thrpt` | ✓ | X | Yes |
 | `stdev_agg_forks` | `thrpt` | X | X | Plot form not decided |
-| Tail latency (`p50`, `p95`, `p99`) | `sample` | X | X | Plot form not decided |
+| Tail latency (`p50`, `p90`, `p95`, `p99`, `p99_9`, `p99_99`, `p100`) | `sample` | X | ✓ | Yes: `add-tail-latency`, `uv run latency`, its own tables and two plots: percentile spectrum per thread count, and `p50`, `p95`, `p99` against threads. Mean of reruns, log axis, bands of `ci.method` at alpha 0.3. |
 
-Tail latency is the one metric from different rows: it comes from the separate `sample` measurement. It gets its own table and plot and is never joined onto `thrpt` rows. The supplied `docs/jmh_sample.csv` has no `sample` rows yet.
+Tail latency is the one metric from different rows: it comes from the separate `sample` measurement. It gets its own table and plot and is never joined onto `thrpt` rows. The supplied `docs/jmh_sample.csv` has no `sample` rows; `docs/raw3.csv` has them for 3 reruns.
 
 Which metrics finally appear as a plot or only in the table is still to be decided.
 

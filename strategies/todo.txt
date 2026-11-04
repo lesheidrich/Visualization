@@ -3,8 +3,7 @@ TODO (written 2026-11-02)
 ┌───────────────────────┬──────────────────────────────────────────────────────────────────────────────────────┐
 │         Item          │                                        Status                                        │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
-│ Tail latency          │ You said later. It gets its own table and plot from the sample rows. docs/ledger_all │
-│                       │ .xlsx now has real sample rows to try it on                                          │
+│ Tail latency          │ Done: uv run latency (add-tail-latency), own tables and two plots from sample rows   │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
 │ batch_fill plot       │ Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot)                        │
 ├───────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
@@ -24,10 +23,9 @@ Two things outside your list that also need doing:
 
 Ideas from research_questions.txt. Not built. Nobody has decided whether to build them.
 
-[ ] Tail latency
-    The owner said later. Its own table and plot, from the `sample` rows. Never joined onto `thrpt` rows.
-    docs/ledger_all.xlsx has real sample rows (one rerun). Still to pick: which percentiles.
-    Do not put bars on a log axis. Notes line 113 proposes that.
+[x] Tail latency
+    Done: `uv run latency` (add-tail-latency). Own tables and two plots, from the `sample` rows. Never joined onto `thrpt` rows.
+    Tested on docs/raw3.csv (3 reruns). The final 10-rerun CSV still needs the same skew check as the other t intervals.
 
 [x] batch_fill plot
     Done: bar plot for mb2_rawFinalize only (add-batch-fill-plot).
