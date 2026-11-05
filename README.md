@@ -105,7 +105,7 @@ with an automatic y-axis; the real `gc_time_pct` plots are in `2026-11-03_09-05-
 ## Output names
 
 Each run writes to `out/YYYY-MM-DD_HH-MM-SS_<feature>/` (UTC, to the second), where the feature
-is `thrpt`, `speedup`, `gc_pauses` or `compare` (`uv run gc` writes to `..._gc_pauses/`). If that folder
+is `thrpt`, `speedup`, `gc_pauses`, `compare` or `latency` (`uv run gc` writes to `..._gc_pauses/`). If that folder
 exists, the run waits for the next free second, so it never overwrites anything. All features name files
 `<feature>_<benchmark>_<part>`:
 
@@ -362,7 +362,7 @@ requested or has no `batch_fill` mean, no file is written. The plot has no notes
 - `latency_<benchmark>_avg.csv`: per strategy and thread count, the mean of reruns of each percentile, with `<p>_t_low`,
   `<p>_t_high`, `<p>_ci_low` and `<p>_ci_high`. Bootstrap seeds come from benchmark, strategy, threads and `latency_<p>`.
 - `latency_<benchmark>_spectrum`: one panel per thread count, one line per strategy. The x axis places a percentile at
-  minus log10 of one minus its fraction and ends at 99.99. `p100` is in the tables only: it is the single slowest call of a rerun, so one spike swings its interval.
+  minus log10 of one minus its fraction and ends at 99.99. `p100` is in the tables only: it is the single slowest call of a rerun, so one spike swings its interval. A lone interval whose neighbours have none is an error bar here too.
 - `latency_<benchmark>_percentiles`: panels `p50`, `p95` and `p99` against BlobShuffle threads. A strategy with one thread count,
   such as Base, is a marker with an error bar, and so is a lone interval whose neighbours have none.
 

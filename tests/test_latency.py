@@ -455,6 +455,24 @@ def test_spec_p100_stays_out_of_the_plot(tmp_path, monkeypatch, capsys):
     assert (float(table.p100_ci_low), float(table.p100_ci_high)) == (200, 90000)
 
 
+@pytest.mark.parametrize("column", ["p50", "p90", "p95", "p99", "p99_9", "p99_99"])
+def test_spec_every_drawn_percentile_warns(config, column):
+    empty = {f"{p}_{k}": np.nan for p in P for k in ("t_low", "t_high", "ci_low", "ci_high")}
+    zero = pd.DataFrame([{"strategy": "1a", "threads_blobshuffle": 1, **{p: 1.0 for p in P}, column: 0.0, **empty}])
+    with pytest.warns(UserWarning, match=f"Zero {column} mean left out"):
+        latency.warn_unplottable(zero, MB1, config)
+    low = pd.DataFrame([{"strategy": "1a", "threads_blobshuffle": 1, **{p: 1.0 for p in P}, **empty, f"{column}_t_low": -1.0}])
+    with pytest.warns(UserWarning, match=f"at or below zero for {MB1}/1a/threads=1 at {column}:"):
+        latency.warn_unplottable(low, MB1, config)
+
+
+def test_spec_percentile_plot_limits_ignore_other_percentiles(tmp_path, monkeypatch, capsys):
+    rows = [row("1a", n, "01", (10, 500, 100, 200, 9000, 9000, 90000)) for n in (1, 2)]
+    _, _, _, figures, _ = run(tmp_path, monkeypatch, capsys, rows)
+    # Only p50, p95 and p99 count: 10 / 1.25 and 200 * 1.25.
+    assert figures[f"latency_{MB1}_percentiles"].axes[0].get_ylim() == pytest.approx((8, 250))
+
+
 def test_unit_zero_p100_gives_no_plot_warning(config):
     averages = pd.DataFrame([{"strategy": "1a", "threads_blobshuffle": 1, **{p: 1.0 for p in P}, "p100": 0.0,
                               **{f"{p}_{k}": np.nan for p in P for k in ("t_low", "t_high", "ci_low", "ci_high")}}])
