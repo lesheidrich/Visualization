@@ -209,7 +209,7 @@ def test_feature_files_exist_per_benchmark_and_format(tmp_path, monkeypatch):
     assert all(p.is_file() for p in paths) and len({p.parent for p in paths}) == 1
     assert sum("gc_alloc_rate_norm." in n for n in names) == 4          # no per-rerun alloc plots
     assert sorted(figures) == sorted([f"gc_{b}_{part}" for b in (BENCH, BENCH2)
-                                      for part in ("pauses_max", "gc_alloc_rate_norm")]
+                                      for part in ("pauses_max", "gc_alloc_rate_norm", "gc_time_pct")]
                                      + [f"gc_{BENCH2}_batch_fill"])      # batch fill: mb2 only
 
 

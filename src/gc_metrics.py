@@ -1,6 +1,7 @@
-"""GC, pause and batch-fill table, pauses_max dot plot, gc_alloc_rate_norm bar plot and, for mb2_rawFinalize only, batch_fill bar plot: preparation, averages, pivots, CSV and figure export."""
+"""GC, pause and batch-fill table, pauses_max dot plot, gc_alloc_rate_norm and gc_time_pct bar plots and, for mb2_rawFinalize only, batch_fill bar plot: preparation, averages, pivots, CSV and figure export."""
 import json
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -35,6 +36,8 @@ BLANK_EFFECT = {"gc_time": "; gc_time_pct missing",
 ALLOC = "gc_alloc_rate_norm"
 ALLOC_CI = (f"{ALLOC}_ci_low", f"{ALLOC}_ci_high")
 ALLOC_T = (f"{ALLOC}_t_low", f"{ALLOC}_t_high")
+TIME_PCT = "gc_time_pct"
+TIME_PCT_T = (f"{TIME_PCT}_t_low", f"{TIME_PCT}_t_high")
 FILL = "batch_fill"
 FILL_T = (f"{FILL}_t_low", f"{FILL}_t_high")
 BATCH_FILL_BENCHMARK = "mb2_rawFinalize"
@@ -356,12 +359,48 @@ def render_batch_fill(averages, config, benchmark, *, strategies, threads):
                         title=f"{benchmark} \u2014 {FILL}, mean of reruns")
 
 
+def _warn_without_interval(averages, benchmark, metric, t_columns):
+    for _, row in averages[averages["benchmark_short"].eq(benchmark)].iterrows():
+        if pd.notna(row[metric]) and (pd.isna(row[t_columns[0]]) or pd.isna(row[t_columns[1]])):
+            warn(f"No {metric} t interval for {benchmark}/{row['strategy']}/"
+                 f"threads={row['threads_blobshuffle']}: fewer than two reruns or no spread")
+
+
 def warn_batch_fill_without_interval(averages, benchmark):
     """One warning per group with a batch_fill mean but no t interval (plot step only)."""
-    for _, row in averages[averages["benchmark_short"].eq(benchmark)].iterrows():
-        if pd.notna(row[FILL]) and (pd.isna(row[FILL_T[0]]) or pd.isna(row[FILL_T[1]])):
-            warn(f"No {FILL} t interval for {benchmark}/{row['strategy']}/"
-                 f"threads={row['threads_blobshuffle']}: fewer than two reruns or no spread")
+    _warn_without_interval(averages, benchmark, FILL, FILL_T)
+
+
+def warn_gc_time_without_interval(averages, benchmark):
+    """One warning per group with a gc_time_pct mean but no t interval (plot step only)."""
+    _warn_without_interval(averages, benchmark, TIME_PCT, TIME_PCT_T)
+
+
+def rounded_top(highest):
+    """Smallest 1, 2 or 5 times a power of ten at or above 1.1 times `highest`; 1 if `highest` is 0.
+
+    Exact in decimal arithmetic on the shortest text of the float, so no 2.0000000000000004."""
+    target = Decimal(repr(float(highest))) * Decimal("1.1")
+    if target <= 0:
+        return 1.0
+    exponent = target.adjusted()
+    for step in (1, 2, 5, 10):
+        candidate = Decimal(step).scaleb(exponent)
+        if candidate >= target:
+            return float(candidate)
+
+
+def render_gc_time(averages, config, benchmark, *, strategies, threads):
+    """Bars of the mean of reruns of gc_time_pct (%) with 95% t interval error bars; axis top rounded up."""
+    fig = _render_bars(averages, config, strategies=strategies, threads=threads, metric=TIME_PCT,
+                       t_columns=TIME_PCT_T, ylabel=f"{TIME_PCT} (%)",
+                       title=f"{benchmark} \u2014 {TIME_PCT}, mean of reruns")
+    known = averages[averages[TIME_PCT].notna()]
+    drawn = known[TIME_PCT].tolist()
+    complete = known[TIME_PCT_T[0]].notna() & known[TIME_PCT_T[1]].notna()
+    drawn += known.loc[complete, TIME_PCT_T[1]].tolist()
+    fig.axes[0].set_ylim(bottom=0, top=rounded_top(max(drawn)))
+    return fig
 
 
 def run(config):
@@ -408,6 +447,17 @@ def run(config):
         finally:
             plt.close(fig)
         bench_averages = averages[averages["benchmark_short"].eq(benchmark)]
+        if bench_averages[TIME_PCT].notna().any():
+            warn_gc_time_without_interval(bench_averages, benchmark)
+            fig = render_gc_time(bench_averages, config, benchmark,
+                                 strategies=strategy_order(data, config),
+                                 threads=sorted(int(n) for n in data["threads_blobshuffle"].unique()))
+            try:
+                paths.extend(save_figure(fig, directory / stem(TIME_PCT), config))
+                if config.show:
+                    plt.show()
+            finally:
+                plt.close(fig)
         if benchmark == BATCH_FILL_BENCHMARK and bench_averages[FILL].notna().any():
             warn_batch_fill_without_interval(bench_averages, benchmark)
             fig = render_batch_fill(bench_averages, config, benchmark,

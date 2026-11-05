@@ -761,7 +761,7 @@ def test_cli__gc_files_live_in_the_gc_pauses_folder_of_that_second(tmp_path, cap
     code, printed, _, err = run_main(gc_main, cfg, capsys)
     assert code == 0, err
     assert [p.name for p in (tmp_path / "out").iterdir()] == ["2026-11-01_15-01-27_gc_pauses"]
-    assert {Path(p).parent.name for p in printed} == {"2026-11-01_15-01-27_gc_pauses"} and len(printed) == 12
+    assert {Path(p).parent.name for p in printed} == {"2026-11-01_15-01-27_gc_pauses"} and len(printed) == 13
 
 
 def test_cli__benchmarks_that_share_a_file_name_stop_before_output(tmp_path, capsys):

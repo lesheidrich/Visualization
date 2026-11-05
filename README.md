@@ -92,8 +92,8 @@ strategy identifiers (trimmed lowercase, with a final `.0` removed), not labels.
 ## Plot samples
 
 `plot_samples/` holds example PNGs from a 3-rerun ledger, with no tables or ledger. They are not thesis
-results. Older compare folders keep the legend wording of their time, and `preview_gc_time` is a preview
-that `uv run gc` does not produce.
+results. Older compare folders keep the legend wording of their time. `preview_gc_time` is an older preview
+with an automatic y-axis; the real `gc_time_pct` plots are in `2026-11-03_09-05-42_gc_pauses`.
 
 ## Output names
 
@@ -111,6 +111,7 @@ exists, the run waits for the next free second, so it never overwrites anything.
 | `gc_mb1_rawNoFinalize_r_all.csv` | GC metrics, one row per strategy, thread count and rerun |
 | `gc_mb1_rawNoFinalize_gc_time_pivot.csv` | GC time, strategy by thread count |
 | `gc_mb1_rawNoFinalize_gc_alloc_rate_norm.png` | gc_alloc_rate_norm, mean of reruns |
+| `gc_mb1_rawNoFinalize_gc_time_pct.png` | gc_time_pct, mean of reruns |
 | `gc_mb2_rawFinalize_batch_fill.png` | batch_fill, mean of reruns (mb2_rawFinalize only) |
 
 Unsafe characters in a benchmark or rerun name become underscores. If two names would then
@@ -281,7 +282,7 @@ use the per-rerun CSV for the worst case. Every averaged metric has a 95% t inte
 rerun values in `<metric>_t_low` and `<metric>_t_high` (the last columns of the `_avg` CSV);
 a group with fewer than two reruns, no spread, or a blank contributor has them blank, with no
 extra warning from the table. The `batch_fill` plot of `mb2_rawFinalize` warns for a group that has a
-mean but no t interval. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
+mean but no t interval, and so does the `gc_time_pct` plot. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
 checks), in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high`: 10,000 resamples, seeded per
 benchmark, strategy and thread count as for throughput; there a blank value comes with a warning
 naming the group. The pivots hold the means only.
@@ -314,6 +315,20 @@ blank; the title says `95% t interval of reruns` on a second line. A lower bound
 true in the CSV and the axis still starts at 0. A
 strategy with no mean at a thread count has no bar there, and the strategies present
 are centred in that group, as on the pauses_max plot. There are no per-rerun allocation plots.
+
+### gc_time_pct bar plot
+
+Per benchmark, `gc` also writes `gc_<benchmark>_gc_time_pct.<fmt>` (one file per format in
+`output.formats`), saved with the other GC plots. Bars are the mean of reruns of `gc_time_pct` on a
+linear y-axis from zero. The y-axis label is `gc_time_pct (%)`. Error bars are the 95% t interval
+from `gc_time_pct_t_low` and `gc_time_pct_t_high` in the `_avg` CSV; the title says
+`95% t interval of reruns` when any is drawn. The y-axis top is 1.1 times the highest drawn value
+(the tallest bar or the highest error bar end), rounded up to the next 1, 2 or 5 times a power of
+ten. Example: highest 6 gives 10. If the highest value is 0, the top is 1. Only this plot has this
+rule; every other plot keeps its axis. A lower bound below zero stays in the CSV while the axis
+starts at 0. A group with a mean but no t interval (fewer than two reruns, or no spread) has a bar,
+no error bar and one warning naming it. A benchmark with no `gc_time_pct` mean gets no file.
+`gc_count` is not plotted; it stays in the table. The plot has no notes.
 
 ### batch_fill bar plot
 

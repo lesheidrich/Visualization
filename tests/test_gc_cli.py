@@ -52,21 +52,22 @@ def test_two_benchmarks_ten_reruns_other_cwd_run_twice(tmp_path):
         result = invoke("gc", config, other)
         assert result.returncode == 0, result.stderr
         paths = [Path(line) for line in result.stdout.splitlines()]
-        assert len(paths) == 25                                         # (10 CSVs + 2 PNGs) x 2 benchmarks + mb2 batch fill PNG
-        assert len(set(paths)) == 25
+        assert len(paths) == 27                                         # (10 CSVs + 3 PNGs) x 2 benchmarks + mb2 batch fill PNG
+        assert len(set(paths)) == 27
         assert sum(p.suffix == ".csv" for p in paths) == 20
-        assert sum(p.suffix == ".png" for p in paths) == 5
+        assert sum(p.suffix == ".png" for p in paths) == 7
         assert all(path.is_file() and path.stat().st_size > 0 for path in paths)
         assert len({path.parent for path in paths}) == 1               # one new directory per call
         assert project / "out" in paths[0].parents
         for benchmark in BENCHMARKS:
             mine = [p for p in paths if p.name.startswith("gc_")
                     and p.name.split("_")[1:3] == benchmark.split("_")[:2]]
-            assert len(mine) == (13 if benchmark == "mb2_rawFinalize" else 12)
+            assert len(mine) == (14 if benchmark == "mb2_rawFinalize" else 13)
             assert sum(p.name.endswith("_pauses_max_median.csv") for p in mine) == 1
             png = [p for p in mine if p.suffix == ".png"]
             assert sorted(p.name for p in png) == sorted(
-                [f"gc_{benchmark}_gc_alloc_rate_norm.png", f"gc_{benchmark}_pauses_max.png"]
+                [f"gc_{benchmark}_gc_alloc_rate_norm.png", f"gc_{benchmark}_gc_time_pct.png",
+                 f"gc_{benchmark}_pauses_max.png"]
                 + ([f"gc_{benchmark}_batch_fill.png"] if benchmark == "mb2_rawFinalize" else []))
             assert all(p.read_bytes()[:4] == b"\x89PNG" for p in png)
             assert sum(p.name.endswith("_r_all.csv") for p in mine) == 1
