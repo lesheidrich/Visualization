@@ -23,7 +23,7 @@ Changes the thesis will need, to deal with later. Nothing here has been applied.
 
 The research agent read these. They have not been rechecked by hand. Kalibera & Jones and Georges et al. say nothing about latency percentiles.
 
-To state in the methods: values near 26 to 30 ns are close to the cost of the timer (Shipilev 2014, a blog, measured on other machines), so they aren't exact. JMH's sample mode samples calls, and may miss pauses. No source covers averaging `p100` across reruns.
+To state in the methods: values near 26 to 30 ns are close to the cost of the timer (Shipilev 2014, a blog, measured on other machines), so they aren't exact. JMH's sample mode samples calls, and may miss pauses. No source covers averaging `p100` across reruns, so the plots stop at 99.99 and only the tables hold it. The spectrum's log y axis is our choice: Zhao et al. Fig 5 uses a linear y axis.
 
 ## 2. Reruns as the replicates
 

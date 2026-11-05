@@ -228,9 +228,9 @@ def test_spec_positions_and_values(tmp_path, monkeypatch, capsys):
     _, _, _, figures, _ = run(tmp_path, monkeypatch, capsys, group("1a", 1, [1, 2, 3]))
     ax = figures[f"latency_{MB1}_spectrum"].axes[0]
     line = ax.get_lines()[0]
-    assert line.get_xdata() == pytest.approx((0.30103, 1, 1.30103, 2, 3, 4, 5), abs=1e-4)
-    assert line.get_ydata() == pytest.approx([2 * v for v in BASE_VALUES])     # mean of scales 1, 2, 3 is 2
-    assert [t.get_text() for t in ax.get_xticklabels()] == ["50", "90", "95", "99", "99.9", "99.99", "100"]
+    assert line.get_xdata() == pytest.approx((0.30103, 1, 1.30103, 2, 3, 4), abs=1e-4)
+    assert line.get_ydata() == pytest.approx([2 * v for v in BASE_VALUES[:6]])     # mean of scales 1, 2, 3 is 2
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["50", "90", "95", "99", "99.9", "99.99"]
     assert ax.get_yscale() == "log" and ax.get_title() == "N = 1"
 
 
@@ -307,7 +307,7 @@ def test_spec_bands_follow_the_method(tmp_path, monkeypatch, capsys):
         assert ends[1.0] == pytest.approx((max(low, bottom), high), abs=1e-3)
         spectrum = figures[f"latency_{MB1}_spectrum"]
         assert title in spectrum._suptitle.get_text()
-        assert band_ends(bands(spectrum.axes[0])[0])[5.0] == pytest.approx((max(low, spectrum.axes[0].get_ylim()[0]), high), abs=1e-3)
+        assert band_ends(bands(spectrum.axes[0])[0])[4.0] == pytest.approx((max(low, spectrum.axes[0].get_ylim()[0]), high), abs=1e-3)
 
 
 def test_spec_no_interval_has_no_band_and_no_method_in_title(tmp_path, monkeypatch, capsys):
@@ -438,6 +438,30 @@ def test_spec_zero_mean_left_out_with_warning(tmp_path, monkeypatch, capsys):
     assert f"Zero p50 mean left out of the log plot for {MB1}/1a/threads=1" in messages
     data = figures[f"latency_{MB1}_spectrum"].axes[0].get_lines()[0].get_ydata()
     assert np.isnan(data[0]) and data[1] == 110
+
+
+def test_spec_p100_stays_out_of_the_plot(tmp_path, monkeypatch, capsys):
+    rows = [row("1a", n, f"{i + 1:02d}", (100, 110, 120, 130, 140, 150, v)) for n in (1, 2)
+            for i, v in enumerate((200, 200, 90000))]
+    _, folder, messages, figures, _ = run(tmp_path, monkeypatch, capsys, rows)
+    ax = figures[f"latency_{MB1}_spectrum"].axes[0]
+    assert ax.get_ylim() == pytest.approx((80, 187.5))     # 100 / 1.25 and 150 * 1.25: no group's p100
+    assert len(ax.get_lines()[0].get_ydata()) == 6 and not bands(ax)
+    assert not [m for m in messages if "p100" in m and "band" in m]
+    table = read_csv(folder / f"latency_{MB1}_avg.csv").iloc[0]
+    # 200, 200, 90000: mean 30133.33, SD = 89800 / sqrt(3), half = 4.302653 * 89800 / 3 = 128792.74
+    assert float(table.p100) == pytest.approx(30133.33, abs=0.01)
+    assert float(table.p100_t_low) == pytest.approx(-98659.41, abs=0.01)
+    assert (float(table.p100_ci_low), float(table.p100_ci_high)) == (200, 90000)
+
+
+def test_unit_zero_p100_gives_no_plot_warning(config):
+    averages = pd.DataFrame([{"strategy": "1a", "threads_blobshuffle": 1, **{p: 1.0 for p in P}, "p100": 0.0,
+                              **{f"{p}_{k}": np.nan for p in P for k in ("t_low", "t_high", "ci_low", "ci_high")}}])
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        latency.warn_unplottable(averages, MB1, config)
 
 
 def test_unit_all_zero_still_draws(tmp_path, monkeypatch, capsys):

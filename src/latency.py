@@ -15,9 +15,8 @@ from .utils import (ALL_RERUNS_PART, AVERAGE_PART, PlainLogFormatter, file_names
 SPECTRUM = {"p50": 0.5, "p90": 0.9, "p95": 0.95, "p99": 0.99, "p99_9": 0.999, "p99_99": 0.9999}
 PERCENTILES = (*SPECTRUM, "p100")
 PANELS = ("p50", "p95", "p99")
-TICK_LABELS = ("50", "90", "95", "99", "99.9", "99.99", "100")
-# Minus log10 of (1 - fraction); 100 has no place on that scale, so it sits one step after 99.99.
-X_POSITIONS = tuple(-math.log10(1 - fraction) for fraction in SPECTRUM.values()) + (5.0,)
+TICK_LABELS = ("50", "90", "95", "99", "99.9", "99.99")
+X_POSITIONS = tuple(-math.log10(1 - fraction) for fraction in SPECTRUM.values())  # Minus log10 of (1 - fraction).
 UNIT = "ns/op"
 UNIT_FACTORS = {"ns/op": 1, "us/op": 1_000, "ms/op": 1_000_000, "s/op": 1_000_000_000}
 LINE_ALPHA = 1
@@ -147,7 +146,7 @@ def warn_unplottable(averages, benchmark, config):
     """Plot step: one warning per group and percentile the log axis cannot show as it is."""
     for _, row in averages.iterrows():
         name = f"{benchmark}/{row['strategy']}/threads={row['threads_blobshuffle']}"
-        for column in PERCENTILES:
+        for column in SPECTRUM:  # Every percentile a plot draws; p100 is in the tables only.
             low = row[interval_columns(config.ci_method, column)[0]]
             if row[column] <= 0:
                 warn(f"Zero {column} mean left out of the log plot for {name}")
@@ -218,7 +217,7 @@ def render_spectrum(averages, config, benchmark, *, strategies, threads):
                              figsize=(max(width, 3.2 * len(threads)), height))
     axes = axes[0]
     palette = matplotlib.colormaps["tab10"]
-    bottom, top = axis_limits(averages, PERCENTILES, config)
+    bottom, top = axis_limits(averages, tuple(SPECTRUM), config)
     drawn = False
     present = set()
     for ax, n in zip(axes, threads):
@@ -226,7 +225,7 @@ def render_spectrum(averages, config, benchmark, *, strategies, threads):
             data = averages[averages["strategy"].eq(strategy) & averages["threads_blobshuffle"].eq(n)]
             if data.empty:
                 continue
-            means, lows, highs = _series(data, PERCENTILES, config.ci_method, bottom)
+            means, lows, highs = _series(data, tuple(SPECTRUM), config.ci_method, bottom)
             colour = _colour(config, strategy, k, palette)
             present.add(strategy)
             ax.plot(X_POSITIONS, means[0], marker="o", markersize=4, linewidth=1.8, color=colour, alpha=LINE_ALPHA,

@@ -38,7 +38,7 @@ We never average CI bounds.
 | | | Plot of the ratio | ✓ | Done: `uv run compare` also saves `compare_<benchmark>_ratio` (`add-compare-plot`): per thread count a dot at `logt_ratio`, a thick bar for the equivalence interval, a thin bar for the difference interval, and lines at 1 and at the margin. Drawn from the same table; the CSV is unchanged. |
 
 | 5 | Tail latency | Two tables | ✓ | `uv run latency` (`add-tail-latency`). Per rerun, and mean of reruns with both CI methods, from `sample` rows. |
-| | | Two plots | ✓ | Percentile spectrum per thread count, and `p50`, `p95`, `p99` against threads. Log axis, line alpha 1, bands of `ci.method` at alpha 0.3. |
+| | | Two plots | ✓ | Percentile spectrum per thread count up to 99.99, and `p50`, `p95`, `p99` against threads. Log axis, line alpha 1, bands of `ci.method` at alpha 0.3. |
 
 **Excluded strategy:** on 2026-11-03 the owner said "we're removing 2_0 from visualization". S2_0 (ledger key `2null`) is set in `config.yaml` as `strategies.exclude: [2null]`, so none of the four commands draws or tabulates it. `total_reruns` then counts only reruns of the kept strategies, so a rerun or thread count held only by S2_0 disappears; neither happens in `docs/raw3.csv`. The ledger keeps its rows, and the other strategies keep their values.
 
@@ -59,7 +59,7 @@ One row per benchmark, strategy, thread count and rerun, plus the mean of reruns
 | `batch_fill` | `thrpt` | ✓ | ✓ | Yes: `add-batch-fill-plot`, `mb2_rawFinalize` only. Bars are the mean of reruns on a linear axis from zero, with its top at the larger of 1 and the automatic top. Error bars are the 95% t interval, in the `_avg` CSV as `batch_fill_t_low` and `_t_high`. |
 | `batch_bytes` | `thrpt` | ✓ | X | Yes |
 | `stdev_agg_forks` | `thrpt` | X | X | Plot form not decided |
-| Tail latency (`p50`, `p90`, `p95`, `p99`, `p99_9`, `p99_99`, `p100`) | `sample` | X | ✓ | Yes: `add-tail-latency`, `uv run latency`, its own tables and two plots: percentile spectrum per thread count, and `p50`, `p95`, `p99` against threads. Mean of reruns, log axis, bands of `ci.method` at alpha 0.3. |
+| Tail latency (`p50`, `p90`, `p95`, `p99`, `p99_9`, `p99_99`, `p100`) | `sample` | X | ✓ | Yes: `add-tail-latency`, `uv run latency`, its own tables and two plots: percentile spectrum per thread count up to 99.99 (`p100` in the tables only), and `p50`, `p95`, `p99` against threads. Mean of reruns, log axis, bands of `ci.method` at alpha 0.3. |
 
 Tail latency is the one metric from different rows: it comes from the separate `sample` measurement. It gets its own table and plot and is never joined onto `thrpt` rows. The supplied `docs/jmh_sample.csv` has no `sample` rows; `docs/raw3.csv` has them for 3 reruns.
 
