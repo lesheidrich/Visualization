@@ -147,13 +147,14 @@ The owner decided this on 2026-11-02.
 | Throughput mean-of-reruns plots | 95% t interval of reruns | `t_low`, `t_high` |
 | `gc_alloc_rate_norm` mean-of-reruns plots | 95% t interval of reruns | `gc_alloc_rate_norm_t_low`, `gc_alloc_rate_norm_t_high` |
 | `batch_fill` mean-of-reruns plot, `mb2_rawFinalize` only | 95% t interval of reruns | `batch_fill_t_low`, `batch_fill_t_high` |
-| Tables, for testing and sanity checks | 95% percentile bootstrap | `ci_low`, `ci_high` (and `gc_alloc_rate_norm_ci_low`, `gc_alloc_rate_norm_ci_high`) |
+| Tables, and plots with `ci.method: resampled` | 95% percentile bootstrap | `ci_low`, `ci_high` and `<metric>_ci_low`, `<metric>_ci_high` |
+| Latency mean-of-reruns plots | The method `ci.method` picks, as bands | `<p>_t_low`, `<p>_t_high`, `<p>_ci_low`, `<p>_ci_high` |
 | GC `_avg` tables, every averaged metric | 95% t interval of reruns, drawn for `gc_alloc_rate_norm`, `gc_time_pct` and, for `mb2_rawFinalize`, `batch_fill` | `<metric>_t_low`, `<metric>_t_high` (blank without spread or with a blank contributor) |
 | Speedup mean-of-reruns plots | 95% paired Fieller interval | `fieller_low`, `fieller_high` |
 | Speedup tables, for checks | paired resampled CI, and t on the per-rerun ratios | `ci_low`, `ci_high`, `t_low`, `t_high` |
 | Single-rerun throughput bars | JMH's own 99.9% bounds from the ledger | `score_confidence_low`, `score_confidence_high` |
 
-**Status: built** (OpenSpec change `plot-t-intervals`). The mean-of-reruns plots draw the columns in the table. The t interval function is `t_interval` in `src/utils.py` and the Fieller function is `fieller_interval` there. Bar heights and all means are unchanged, and the bootstrap columns stay in the tables, for checks only.
+**Status: built** (OpenSpec change `plot-t-intervals`). The mean-of-reruns plots draw the columns in the table. The t interval function is `t_interval` in `src/ci.py` and the Fieller function is `fieller_interval` there. Since `add-ci-module`, `ci.method: resampled` draws the bootstrap instead on the throughput and GC bar plots. Bar heights and all means are unchanged, and the bootstrap columns stay in the tables.
 
 **Why speedup is different.** The plotted point of speedup is a ratio of means, not a plain mean. The t formula is for a plain mean, so it can't go straight on a ratio. Paired Fieller is the t version for a ratio. It finds every ratio θ for which a t interval on (strategy − θ × base), across the reruns, contains zero. It uses the same t value and keeps each strategy score paired with its base score from the same rerun. The bar then matches the plotted point. Sources: Fieller, JRSS B, 1954, https://doi.org/10.1111/j.2517-6161.1954.tb00159.x ; von Luxburg & Franz, Statistica Sinica 19(3), 2009, https://arxiv.org/pdf/0711.0198 .
 

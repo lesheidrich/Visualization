@@ -21,14 +21,14 @@ import yaml
 from conftest import gc_observation
 from src import cli, gc_metrics
 from src.gc_metrics import ALLOC_CI, _compact_slots, prepare
-from src.utils import T_METHOD, cell_seed
+from src.ci import T_METHOD, cell_seed
 
 BENCH = "mb1_rawNoFinalize"
 BENCH2 = "mb2_rawFinalize"
 ROOT = Path(__file__).parents[1]
 SAMPLE = ROOT / "docs" / "jmh_sample.csv"
 CI_LOW, CI_HIGH = ALLOC_CI
-T_LOW, T_HIGH = gc_metrics.ALLOC_T
+T_LOW, T_HIGH = "gc_alloc_rate_norm_t_low", "gc_alloc_rate_norm_t_high"
 
 
 @pytest.fixture(autouse=True)
@@ -144,7 +144,8 @@ def test_integration_average_gains_exactly_the_expected_columns_and_nothing_else
         "benchmark_short", "strategy", "threads_blobshuffle", *gc_metrics.AVERAGED,
         "n_reruns", "total_reruns", "contributing_reruns", "source_rows", "source_files",
         "original_strategies", "summary_kind", "gc_alloc_rate_norm_ci_low", "gc_alloc_rate_norm_ci_high",
-        *[f"{m}_t_{e}" for m in gc_metrics.AVERAGED for e in ("low", "high")]]
+        *[f"{m}_t_{e}" for m in gc_metrics.AVERAGED for e in ("low", "high")],
+        *[f"{m}_ci_{e}" for m in gc_metrics.AVERAGED if m != "gc_alloc_rate_norm" for e in ("low", "high")]]
     base = averages[averages["strategy"].eq("base")].iloc[0]
     # Literal values of the unchanged columns (defaults: gc_count 10, gc_time 2500, pauses 5/2, fill 1).
     assert (base["gc_alloc_rate_norm"], base["gc_count"], base["gc_time"], base["gc_time_pct"],
@@ -315,7 +316,8 @@ def compare_with_old(config_path, monkeypatch, tmp_path):
             new_frame, old_frame = pd.read_csv(new), pd.read_csv(old)
             assert old_frame[[CI_LOW, CI_HIGH]].isna().all().all()    # the old run has no CI values
             t_columns = [f"{m}_t_{e}" for m in gc_metrics.AVERAGED for e in ("low", "high")]
-            assert new_frame.columns.tolist()[-len(t_columns) - 2:] == [CI_LOW, CI_HIGH, *t_columns]
+            later = [f"{m}_ci_{e}" for m in gc_metrics.AVERAGED if m != "gc_alloc_rate_norm" for e in ("low", "high")]
+            assert new_frame.columns.tolist()[-len(t_columns) - len(later) - 2:] == [CI_LOW, CI_HIGH, *t_columns, *later]
             pd.testing.assert_frame_equal(new_frame.drop(columns=[CI_LOW, CI_HIGH]),
                                           old_frame.drop(columns=[CI_LOW, CI_HIGH]))
         else:

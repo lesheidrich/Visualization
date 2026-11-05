@@ -18,6 +18,7 @@ uv run thrpt
 uv run speedup
 uv run gc
 uv run compare
+uv run latency
 uv run pytest
 ```
 
@@ -39,6 +40,12 @@ nonempty strings fails naming the setting, before any output. A row with too man
 run, because the ledger reader checks that before it knows any strategy. If excluding leaves a benchmark
 with no rows, the command stops with `No throughput results for benchmark(s)`. The repository's `config.yaml` excludes
 `2null` (S2_0); the ledger keeps its rows, and the other strategies keep their values.
+`ci.method` picks the confidence interval the mean-of-reruns plots draw: `t` (the default, `95% t interval of reruns`) or
+`resampled` (`95% percentile bootstrap of reruns`). Anything else fails naming the setting. Tables hold both methods whatever it says, and plot
+titles name the one drawn. Throughput and the `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` plots follow it. Speedup plots always draw the
+paired Fieller interval, `uv run compare` always uses paired log-t, per-rerun throughput plots keep the ledger's 99.9% bounds, and `pauses_max`
+has no interval. The arithmetic lives in `src/ci.py`.
+The sections below describe the default, `t`.
 Speedup accepts the same settings with `uv run speedup --config /path/to/config.yaml`;
 no additional YAML settings are required. Its reference is fixed to `base` at one
 BlobShuffle thread.
@@ -54,7 +61,7 @@ strategies cover 1, 2, 4, 6, and 8 threads. Its original 70-column schema is ret
 Every row is marked `SYNTHETIC` in provenance fields. These invented values are
 software test data, including their supplied bounds and auxiliary metrics; they
 do not establish performance rankings or valid statistical confidence intervals.
-All of `uv run thrpt`, `speedup`, `gc` and `compare` work with the supplied configuration and sample.
+All of `uv run thrpt`, `speedup`, `gc` and `compare` work with the supplied configuration and sample; `latency` needs `sample` rows, which it lacks.
 `docs/` is not in the repository (it is gitignored), so a clone has no sample ledger: set `input.path` in `config.yaml` to your own ledger.
 
 ## Ledger input
@@ -92,13 +99,13 @@ strategy identifiers (trimmed lowercase, with a final `.0` removed), not labels.
 ## Plot samples
 
 `plot_samples/` holds example PNGs from a 3-rerun ledger, with no tables or ledger. They are not thesis
-results. Older compare folders keep the legend wording of their time. `preview_gc_time` is an older preview
+results. Older compare folders keep the legend wording of their time. The latency plots show `ci.method: t`. `preview_gc_time` is an older preview
 with an automatic y-axis; the real `gc_time_pct` plots are in `2026-11-03_09-05-42_gc_pauses`.
 
 ## Output names
 
 Each run writes to `out/YYYY-MM-DD_HH-MM-SS_<feature>/` (UTC, to the second), where the feature
-is `thrpt`, `speedup`, `gc_pauses` or `compare` (`uv run gc` writes to `..._gc_pauses/`). If that folder
+is `thrpt`, `speedup`, `gc_pauses`, `compare` or `latency` (`uv run gc` writes to `..._gc_pauses/`). If that folder
 exists, the run waits for the next free second, so it never overwrites anything. All features name files
 `<feature>_<benchmark>_<part>`:
 
@@ -132,8 +139,7 @@ the ledger, JMH's 99.9% interval; a row without them gets `interval_kind` `none`
 SD and t with n - 1 degrees of freedom; for scores 100, 110, ..., 190 that is [123.34, 166.66].
 The title says `95% t interval of reruns` and `interval_kind` says the same. The plot draws only
 the t columns. A lower bound below zero stays true in the CSV; the plot's axis still starts at 0.
-The CSV also keeps a 95% resampled CI (percentile bootstrap) of the same scores, for tests and
-sanity checks: 10,000 resamples of whole reruns,
+The CSV also keeps a 95% resampled CI (percentile bootstrap) of the same scores, drawn instead with `ci.method: resampled`: 10,000 resamples of whole reruns,
 with a fixed seed (42, combined with benchmark, strategy and threads) and the scores
 taken sorted by rerun name, so repeat runs and a reordered ledger give identical values. Ledger bounds do not contribute. For scores 100 and
 200 the resampled means are 100, 150 or 200, so the resampled CI is [100, 200]. With ten reruns the real coverage of the percentile bootstrap is about 90% on
@@ -149,7 +155,7 @@ bounds, `score_unit`, `interval_kind`, `n_reruns`, `total_reruns`, and JSON-enco
 `contributing_reruns`. Per-rerun CSVs retain input metadata, original score/unit
 values and source file/row. Aggregate CSVs include source files, source rows and
 original strategy identifiers so contributions can be traced to per-rerun CSVs.
-Across-reruns CSVs hold `ci_low`, `ci_high` (resampled CI, for checks), `t_low`, `t_high` (drawn),
+Across-reruns CSVs hold `ci_low`, `ci_high` (resampled CI), `t_low`, `t_high` (the plot draws the pair `ci.method` picks),
 `ci_method`, `ci_resamples` and `ci_seed` instead of ledger bounds.
 `ci_method` describes `ci_low` and `ci_high`; `interval_kind` names what the plot draws.
 Do not interpret absent observations as zero or overlapping error bars as
@@ -279,13 +285,13 @@ reruns (incomplete coverage warns, as in `thrpt`). If any contributor lacks a
 metric, that metric's mean is empty and a warning is printed. Note that the
 mean `pauses_max` is the **mean of the per-rerun maxima**, not a maximum;
 use the per-rerun CSV for the worst case. Every averaged metric has a 95% t interval of the
-rerun values in `<metric>_t_low` and `<metric>_t_high` (the last columns of the `_avg` CSV);
+rerun values in `<metric>_t_low` and `<metric>_t_high` (in the `_avg` CSV);
 a group with fewer than two reruns, no spread, or a blank contributor has them blank, with no
 extra warning from the table. The `batch_fill` plot of `mb2_rawFinalize` warns for a group that has a
-mean but no t interval, and so does the `gc_time_pct` plot. Only `gc_alloc_rate_norm` also has a resampled CI (95% percentile bootstrap, for
-checks), in `gc_alloc_rate_norm_ci_low` and `gc_alloc_rate_norm_ci_high`: 10,000 resamples, seeded per
-benchmark, strategy and thread count as for throughput; there a blank value comes with a warning
-naming the group. The pivots hold the means only.
+mean but no t interval, and so does the `gc_time_pct` plot. Every averaged metric also has a resampled CI (95% percentile bootstrap) in
+`<metric>_ci_low` and `<metric>_ci_high`: 10,000 resamples, seeded per
+benchmark, strategy, thread count and metric as for throughput. For `gc_alloc_rate_norm` a blank value comes with a warning
+naming the group; for the other metrics the columns, which follow the t columns, are just blank. The pivots hold the means only.
 
 ### pauses_max dot plot
 
@@ -344,6 +350,26 @@ at 0. A group with a mean but no t interval (fewer than two reruns, or no spread
 error bar and one warning naming it; a group without a mean has no bar and no such warning. No
 other benchmark gets this plot, `mb1_rawNoFinalize` included. If `mb2_rawFinalize` is not
 requested or has no `batch_fill` mean, no file is written. The plot has no notes.
+
+## Tail latency
+
+`uv run latency` reads only `sample` rows, never joins them to `thrpt` rows, and saves into a new
+`<timestamp>_latency/` folder. A configured benchmark with no `sample` rows stops the command, so the supplied synthetic
+`docs/jmh_sample.csv` does not work with it. Percentiles are converted to ns per op from `score_unit` (`ns/op`, `us/op`, `ms/op` or `s/op`).
+`p99_999` and `p99_9999` are left out: on `docs/raw3.csv` they nearly always equal `p100`.
+
+- `latency_<benchmark>_r_all.csv`: one row per rerun, with `p50`, `p90`, `p95`, `p99`, `p99_9`, `p99_99` and `p100`.
+- `latency_<benchmark>_avg.csv`: per strategy and thread count, the mean of reruns of each percentile, with `<p>_t_low`,
+  `<p>_t_high`, `<p>_ci_low` and `<p>_ci_high`. Bootstrap seeds come from benchmark, strategy, threads and `latency_<p>`.
+- `latency_<benchmark>_spectrum`: one panel per thread count, one line per strategy. The x axis places a percentile at
+  minus log10 of one minus its fraction and ends at 99.99. `p100` is in the tables only: it is the single slowest call of a rerun, so one spike swings its interval. A lone interval whose neighbours have none is an error bar here too.
+- `latency_<benchmark>_percentiles`: panels `p50`, `p95` and `p99` against BlobShuffle threads. A strategy with one thread count,
+  such as Base, is a marker with an error bar, and so is a lone interval whose neighbours have none.
+
+Both plots show the mean of reruns on a shared log y axis, with lines at alpha 1 and bands at alpha 0.3 from the method `ci.method`
+chooses; the title names it. There are no per-rerun plots. The axis bottom is the lowest mean divided by 1.25 and the top is the highest mean or upper
+end times 1.25. A low end under the bottom is drawn at the bottom, and a low end at or below zero also warns; the table keeps the true value.
+Values near 26 to 30 ns are close to the cost of the timer itself, so don't read them as exact.
 
 ## 2A vs 2B comparison
 

@@ -19,7 +19,8 @@ from conftest import gc_observation, observation
 from src import cli, compare, gc_metrics, speedup, thrpt
 from src.compare import prepare as compare_prepare
 from src.config import Config
-from src.utils import FIELLER_METHOD, T_METHOD, cell_seed, load_ledger
+from src.ci import FIELLER_METHOD, T_METHOD, cell_seed
+from src.utils import load_ledger
 
 BENCH = "mb1_rawNoFinalize"
 RERUNS = [f"{i:02d}" for i in range(1, 11)]

@@ -11,6 +11,20 @@ Changes the thesis will need, to deal with later. Nothing here has been applied.
 | Fieller 1954, Journal of the Royal Statistical Society B, doi:10.1111/j.2517-6161.1954.tb00159.x | Required for the speedup error bars | The speedup plots draw a paired Fieller interval |
 | von Luxburg & Franz 2009, Statistica Sinica 19(3), https://arxiv.org/pdf/0711.0198 | Recommended | Practical reference for a confidence interval of a ratio of means |
 
+### For tail latency (`uv run latency`)
+
+| Entry | Status | Why |
+|---|---|---|
+| Zhao, Blackburn, McKinley 2022, "Low-Latency, High-Throughput Garbage Collection", PLDI, doi:10.1145/3519939.3523440 | Recommended | Percentile spectrum with a band over repeated runs (Fig 5 in the arXiv version 2210.17175) |
+| Blackburn et al. 2025, "Rethinking Java Performance Analysis", ASPLOS, doi:10.1145/3669940.3707217 | Recommended | Same plot form in JVM latency (Figs 3, 6). Same author group as Zhao et al. |
+| Leverich & Kozyrakis 2014, "Reconciling High Server Utilization and Sub-millisecond Quality of Service", EuroSys, doi:10.1145/2592798.2592821 | Recommended | Percentile against load (Fig 2). Ours puts thread count on x, so this is an adaptation |
+| Kogias, Mallon, Bugnion 2019, "Lancet: A Self-Correcting Latency Measuring Tool", USENIX ATC, pp. 881-896 | Recommended | Percentile against load (Figs 8, 9) |
+| Zhang et al. 2016, "Treadmill", ISCA, doi:10.1109/ISCA.2016.47 | Recommended | Why reruns are the replicate: each run's p99 converges to a different value |
+
+The research agent read these. They have not been rechecked by hand. Kalibera & Jones and Georges et al. say nothing about latency percentiles.
+
+To state in the methods: values near 26 to 30 ns are close to the cost of the timer (Shipilev 2014, a blog, measured on other machines), so they aren't exact. JMH's sample mode samples calls, and may miss pauses. The plots stop at 99.99 and only the tables hold `p100`: it is the single slowest call of a rerun, so one spike swings its interval. No source covers averaging it across reruns either. The spectrum's log y axis is our choice: Zhao et al. Fig 5 uses a linear y axis.
+
 ## 2. Reruns as the replicates
 
 Reruns stay on one machine. These edits only change which level counts as one sample: a complete rerun instead of a fork.
@@ -31,7 +45,7 @@ Reruns stay on one machine. These edits only change which level counts as one sa
 |---|---|---|
 | Error bars on across-reruns throughput, `gc_alloc_rate_norm`, `gc_time_pct` and `batch_fill` (mb2 only) plots | 95% t interval of the rerun means | Kalibera & Jones 2013 §9.3: [38] |
 | Error bars on across-reruns speedup plots | 95% paired Fieller interval of the ratio of means | Fieller 1954 (to add); von Luxburg & Franz 2009 (to add) |
-| Kept in the tables as a check, not drawn | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
+| Kept in the tables as a check, drawn only if `ci.method` is `resampled` | 95% percentile bootstrap: 10,000 resamples of whole reruns, read at 2.5% and 97.5% | Hesterberg 2015 (to add) |
 
 Per-rerun throughput plots keep the ledger's CI, and `pauses_max` has no CI.
 

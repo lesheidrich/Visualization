@@ -100,7 +100,10 @@ AVG_COLUMNS = (["benchmark_short", "strategy", "threads_blobshuffle", "score", "
                 "gc_alloc_rate_norm_ci_high"]
                + [f"{m}_{s}" for m in ("score", "gc_alloc_rate_norm", "gc_count", "gc_time", "gc_time_pct",
                                        "pauses_max", "pauses_p99", "batch_bytes", "batch_fill")
-                  for s in ("t_low", "t_high")])
+                  for s in ("t_low", "t_high")]
+               + [f"{m}_{s}" for m in ("score", "gc_count", "gc_time", "gc_time_pct", "pauses_max",
+                                       "pauses_p99", "batch_bytes", "batch_fill")
+                  for s in ("ci_low", "ci_high")])
 
 
 def test_avg_csv_columns_and_cells(run):
